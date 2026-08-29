@@ -1,0 +1,38 @@
+/* ── WhyDrawer styles, ported verbatim from the `.why` / `.whybody` / `.mathrow`
+   rules in design/index.html.
+
+   Scoped under .whydrawer, the component's own root, matching RangeBar.css. The
+   mockup's `.why` rule sets `background` twice (var(--surface), then none); only
+   the second one ever applied, so only that one is here. Every value is a token. */
+
+.whydrawer .why {
+  width: 100%; margin-top: 26px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: none; border: 1px solid var(--hair); border-radius: 10px;
+  padding: 17px 20px;
+  color: var(--cream); font: inherit; font-size: 14.5px; font-weight: 500;
+  cursor: pointer; transition: .2s;
+}
+.whydrawer .why:hover,
+.whydrawer .why:focus-visible { border-color: var(--hair2) }
+
+/* The chevron turns rather than swapping ▾ for ▴, so the glyph reads as one
+   continuous gesture with the drawer opening. GSAP drives the rotation. */
+.whydrawer .chev { color: var(--faint); display: inline-block }
+
+.whydrawer .whybody { overflow: hidden; height: 0 }
+.whydrawer .whyinner { padding: 22px 2px 4px }
+
+.whydrawer .mathrow {
+  display: flex; justify-content: space-between; gap: 20px; padding: 13px 0;
+  border-bottom: 1px solid var(--hair); font-size: 14px;
+}
+.whydrawer .mathrow .k { color: var(--cream); font-weight: 500 }
+.whydrawer .mathrow .k em {
+  display: block; font-style: normal; font-weight: 400; font-size: 13px;
+  color: var(--faint); margin-top: 3px; max-width: 46ch; line-height: 1.5;
+}
+/* var(--m) plus tabular figures — non-negotiable #6, numerals must not jitter. */
+.whydrawer .mathrow .v { font-family: var(--m); font-weight: 600; white-space: nowrap }
+/* A figure we do not have renders as an em dash, and reads as absent, not as zero. */
+.whydrawer .mathrow .v.missing { color: var(--faint) }

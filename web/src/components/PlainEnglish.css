@@ -1,0 +1,19 @@
+/* ── PlainEnglish styles, ported verbatim from the `.pe` / `.pip` rules in
+   design/index.html.
+
+   Scoped under .plain-english, the component's own root, matching RangeBar.css.
+   The mockup's selectors are bare (`.pe`, `.pip`) because it is one flat page;
+   scoping them keeps the app screen's other columns out of reach. Every value is
+   a token — no hex ever appears here. */
+
+.plain-english .lbl { margin-bottom: 22px }
+
+.plain-english .pe { border-top: 1px solid var(--hair); padding: 24px 0 }
+.plain-english .pe:last-of-type { border-bottom: 1px solid var(--hair) }
+
+.plain-english .pe h3 {
+  font-family: var(--fd); font-size: 18px; font-weight: 600; letter-spacing: -.022em;
+  margin: 0 0 9px; display: flex; align-items: center; gap: 11px;
+}
+.plain-english .pip { width: 6px; height: 6px; border-radius: 50%; flex: none }
+.plain-english .pe p { margin: 0; font-size: 14.5px; line-height: 1.65; color: var(--dim) }

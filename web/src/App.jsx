@@ -2,9 +2,9 @@ import { useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useLenis } from './lib/useLenis.js'
+import Landing from './components/Landing.jsx'
 import { useAnalysis, readParams } from './lib/useAnalysis.js'
 import { price, range, signedPercent } from './lib/format.js'
-import Pill from './components/ui/Pill.jsx'
 import Card from './components/ui/Card.jsx'
 import Label from './components/ui/Label.jsx'
 import Eyebrow from './components/ui/Eyebrow.jsx'
@@ -48,41 +48,9 @@ export default function App() {
   )
 }
 
-function Mark({ onClick, tagline = false }) {
+function Mark({ onClick }) {
   return (
-    <div className="mark" onClick={onClick}>
-      DCF<span>Lens</span>
-      {tagline && <small>VALUATION, IN PLAIN ENGLISH</small>}
-    </div>
-  )
-}
-
-function Landing({ onEnter }) {
-  return (
-    <div id="site">
-      <header>
-        <Mark tagline onClick={() => window.scrollTo(0, 0)} />
-        <nav className="nav">
-          <Pill solid onClick={onEnter}>Value a company</Pill>
-        </nav>
-      </header>
-
-      <section className="hero wrap">
-        <Eyebrow className="kicker">For people who have never read a balance sheet</Eyebrow>
-        <h1 className="big">
-          <span className="line"><span>Know what</span></span>
-          <span className="line"><span>a stock is</span></span>
-          <span className="line"><span className="accent">actually worth.</span></span>
-        </h1>
-        <p className="lede">
-          We read the filings, do the maths, and tell you whether today&rsquo;s price looks
-          reasonable. In a sentence you can actually understand.
-        </p>
-        <div className="cta-row">
-          <Pill solid onClick={onEnter}>Value a company free</Pill>
-        </div>
-      </section>
-    </div>
+    <div className="mark" onClick={onClick}>DCF<span>Lens</span></div>
   )
 }
 
