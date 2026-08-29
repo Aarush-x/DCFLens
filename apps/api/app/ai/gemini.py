@@ -18,6 +18,8 @@ SAFE_PROVIDER_TOKEN_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 GOOGLE_API_KEY_PATTERN = re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b")
 MAX_PROVIDER_ERROR_BYTES = 16_384
 MAX_PROVIDER_MESSAGE_CHARS = 500
+MAX_OUTPUT_TOKENS = 16_384
+REVIEWED_FALLBACK_MODELS = ("gemini-2.5-flash",)
 logger = logging.getLogger(__name__)
 
 
@@ -62,6 +64,14 @@ class GeminiClientConfig:
     max_response_bytes: int = 65_536
 
 
+@dataclass(frozen=True, slots=True)
+class _GeminiOutput:
+    text: str
+    finish_reason: str | None
+    candidate_token_count: int | None
+    thought_token_count: int | None
+
+
 class GeminiClient:
     """Minimal synchronous Gemini REST client for one-shot structured analysis."""
 
@@ -87,21 +97,69 @@ class GeminiClient:
             timeout_seconds=float(config.timeout_seconds),
             max_response_bytes=config.max_response_bytes,
         )
+        self._models = tuple(dict.fromkeys((model, *REVIEWED_FALLBACK_MODELS)))
         self._opener = opener
 
     def generate(self, request: ProviderRequest) -> str:
-        return self._generate(request, include_response_schema=True)
+        last_malformed_text: str | None = None
+        for index, model in enumerate(self._models):
+            has_fallback = index + 1 < len(self._models)
+            try:
+                output = self._generate(
+                    request,
+                    model=model,
+                    include_response_schema=True,
+                )
+            except GeminiProviderError as exc:
+                if has_fallback and exc.fallback_reason in {
+                    "provider_invalid_request",
+                    "provider_model_unavailable",
+                    "provider_rate_limit",
+                }:
+                    self._log_model_fallback(model, exc.fallback_reason)
+                    continue
+                raise
+
+            try:
+                json.loads(output.text)
+            except json.JSONDecodeError:
+                last_malformed_text = output.text
+                logger.warning(
+                    "gemini_invalid_json_response",
+                    extra={
+                        "gemini_model": model,
+                        "finish_reason": output.finish_reason,
+                        "candidate_token_count": output.candidate_token_count,
+                        "thought_token_count": output.thought_token_count,
+                        "response_chars": len(output.text),
+                    },
+                )
+                if has_fallback:
+                    self._log_model_fallback(model, "malformed_json")
+                    continue
+            else:
+                if index > 0:
+                    logger.info(
+                        "gemini_fallback_model_succeeded",
+                        extra={"gemini_model": model},
+                    )
+                return output.text
+
+        if last_malformed_text is not None:
+            return last_malformed_text
+        raise GeminiProviderError("All reviewed Gemini models failed")
 
     def _generate(
         self,
         request: ProviderRequest,
         *,
+        model: str,
         include_response_schema: bool,
-    ) -> str:
+    ) -> _GeminiOutput:
         generation_config: dict[str, Any] = {
             "responseMimeType": "application/json",
             "temperature": 0.1,
-            "maxOutputTokens": 4096,
+            "maxOutputTokens": MAX_OUTPUT_TOKENS,
         }
         if include_response_schema:
             generation_config["responseJsonSchema"] = request.response_schema
@@ -121,7 +179,7 @@ class GeminiClient:
             separators=(",", ":"),
         ).encode("utf-8")
         http_request = Request(
-            f"{GEMINI_API_ROOT}/{self._config.model}:generateContent",
+            f"{GEMINI_API_ROOT}/{model}:generateContent",
             data=body,
             headers={
                 "Content-Type": "application/json",
@@ -135,7 +193,7 @@ class GeminiClient:
             ) as response:
                 payload_bytes = response.read(self._config.max_response_bytes + 1)
         except (TimeoutError, socket.timeout) as exc:
-            self._log_failure("provider_timeout")
+            self._log_failure("provider_timeout", model=model)
             raise GeminiTimeoutError("Gemini request timed out") from exc
         except HTTPError as exc:
             provider_status, provider_reason, provider_message = (
@@ -146,6 +204,7 @@ class GeminiClient:
             )
             self._log_failure(
                 fallback_reason,
+                model=model,
                 http_status=exc.code,
                 provider_status=provider_status,
                 provider_reason=provider_reason,
@@ -160,10 +219,14 @@ class GeminiClient:
                     extra={
                         "http_status": exc.code,
                         "provider_status": provider_status,
-                        "gemini_model": self._config.model,
+                        "gemini_model": model,
                     },
                 )
-                return self._generate(request, include_response_schema=False)
+                return self._generate(
+                    request,
+                    model=model,
+                    include_response_schema=False,
+                )
             diagnostics = {
                 "http_status": exc.code,
                 "provider_status": provider_status,
@@ -184,15 +247,15 @@ class GeminiClient:
             ) from exc
         except URLError as exc:
             if isinstance(exc.reason, (TimeoutError, socket.timeout)):
-                self._log_failure("provider_timeout")
+                self._log_failure("provider_timeout", model=model)
                 raise GeminiTimeoutError("Gemini request timed out") from exc
-            self._log_failure("provider_unavailable")
+            self._log_failure("provider_unavailable", model=model)
             raise GeminiProviderError(
                 "Gemini request failed",
                 fallback_reason="provider_unavailable",
             ) from exc
         except OSError as exc:
-            self._log_failure("provider_unavailable")
+            self._log_failure("provider_unavailable", model=model)
             raise GeminiProviderError(
                 "Gemini request failed",
                 fallback_reason="provider_unavailable",
@@ -202,17 +265,39 @@ class GeminiClient:
             raise GeminiProviderError("Gemini response exceeded the configured size limit")
         try:
             payload = json.loads(payload_bytes)
-            text = payload["candidates"][0]["content"]["parts"][0]["text"]
+            candidate = payload["candidates"][0]
+            text = candidate["content"]["parts"][0]["text"]
         except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
             raise GeminiProviderError("Gemini returned an invalid response envelope") from exc
         if not isinstance(text, str) or not text.strip():
             raise GeminiProviderError("Gemini returned no structured response text")
-        return text
+        usage = payload.get("usageMetadata", {})
+        return _GeminiOutput(
+            text=text,
+            finish_reason=_safe_provider_token(candidate.get("finishReason")),
+            candidate_token_count=_safe_nonnegative_int(
+                usage.get("candidatesTokenCount")
+            ),
+            thought_token_count=_safe_nonnegative_int(
+                usage.get("thoughtsTokenCount")
+            ),
+        )
+
+    def _log_model_fallback(self, model: str, reason: str) -> None:
+        logger.warning(
+            "gemini_trying_reviewed_fallback_model",
+            extra={
+                "failed_gemini_model": model,
+                "fallback_reason": reason,
+                "fallback_gemini_model": "gemini-2.5-flash",
+            },
+        )
 
     def _log_failure(
         self,
         fallback_reason: str,
         *,
+        model: str,
         http_status: int | None = None,
         provider_status: str | None = None,
         provider_reason: str | None = None,
@@ -226,7 +311,7 @@ class GeminiClient:
                 "provider_status": provider_status,
                 "provider_reason": provider_reason,
                 "provider_message": provider_message,
-                "gemini_model": self._config.model,
+                "gemini_model": model,
             },
         )
 
@@ -258,6 +343,12 @@ def _provider_error_details(
 
 def _safe_provider_token(value: object) -> str | None:
     if isinstance(value, str) and SAFE_PROVIDER_TOKEN_PATTERN.fullmatch(value):
+        return value
+    return None
+
+
+def _safe_nonnegative_int(value: object) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
         return value
     return None
 

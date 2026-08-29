@@ -67,6 +67,7 @@ def test_gemini_client_sends_structured_output_schema_and_header() -> None:
     assert captured["timeout"] == 17.0
     assert http_request.get_header("X-goog-api-key") == "secret-placeholder"
     assert body["generationConfig"]["responseMimeType"] == "application/json"
+    assert body["generationConfig"]["maxOutputTokens"] == 16_384
     assert body["generationConfig"]["responseJsonSchema"] == request.response_schema
     assert "responseSchema" not in body["generationConfig"]
     assert request.response_schema["type"] == "object"
@@ -298,3 +299,97 @@ def test_gemini_client_retries_schema_rejection_once_in_json_mode(
         record.message == "gemini_schema_rejected_retrying_json_mode"
         for record in caplog.records
     )
+
+
+def test_gemini_client_uses_reviewed_fallback_after_malformed_primary_output(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    requests: list[object] = []
+    schema_error = json.dumps(
+        {
+            "error": {
+                "code": 400,
+                "status": "INVALID_ARGUMENT",
+                "message": "Request contains an invalid argument.",
+            }
+        }
+    ).encode()
+    malformed_envelope = json.dumps(
+        {
+            "candidates": [
+                {
+                    "finishReason": "MAX_TOKENS",
+                    "content": {"parts": [{"text": '{"adjustments":'}]},
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 1000,
+                "candidatesTokenCount": 4096,
+                "thoughtsTokenCount": 3000,
+                "totalTokenCount": 8096,
+            },
+        }
+    ).encode()
+    valid_text = json.dumps({"example": "valid"})
+    valid_envelope = json.dumps(
+        {
+            "candidates": [
+                {
+                    "finishReason": "STOP",
+                    "content": {"parts": [{"text": valid_text}]},
+                }
+            ]
+        }
+    ).encode()
+
+    def opener(request, *, timeout: float):
+        requests.append(request)
+        if len(requests) == 1:
+            raise HTTPError(
+                "https://generativelanguage.googleapis.com/redacted",
+                400,
+                "bad request",
+                hdrs=None,
+                fp=BytesIO(schema_error),
+            )
+        if len(requests) == 2:
+            return FakeResponse(malformed_envelope)
+        return FakeResponse(valid_envelope)
+
+    client = GeminiClient(
+        GeminiClientConfig(
+            api_key="secret-placeholder",
+            model="gemini-3.5-flash",
+        ),
+        opener=opener,
+    )
+    provider_request = ProviderRequest(
+        "system",
+        "prompt",
+        {"type": "object", "properties": {"example": {"type": "string"}}},
+    )
+
+    with caplog.at_level("INFO", logger="app.ai.gemini"):
+        result = client.generate(provider_request)
+
+    assert result == valid_text
+    assert len(requests) == 3
+    assert requests[0].full_url.endswith(
+        "/gemini-3.5-flash:generateContent"
+    )
+    assert requests[1].full_url.endswith(
+        "/gemini-3.5-flash:generateContent"
+    )
+    assert requests[2].full_url.endswith(
+        "/gemini-2.5-flash:generateContent"
+    )
+    malformed_record = next(
+        record
+        for record in caplog.records
+        if record.message == "gemini_invalid_json_response"
+    )
+    assert malformed_record.gemini_model == "gemini-3.5-flash"
+    assert malformed_record.finish_reason == "MAX_TOKENS"
+    assert malformed_record.candidate_token_count == 4096
+    assert malformed_record.thought_token_count == 3000
+    assert "adjustments" not in caplog.text
