@@ -79,7 +79,10 @@ class AnalysisEnvelope:
 
 class _UnavailableGeminiProvider:
     def generate(self, request: object) -> str:
-        raise GeminiProviderError("Gemini is not configured")
+        raise GeminiProviderError(
+            "Gemini is not configured",
+            fallback_reason="provider_not_configured",
+        )
 
 
 class AnalysisService:
@@ -320,6 +323,10 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
             )
         )
     else:
+        logger.warning(
+            "gemini_not_configured",
+            extra={"gemini_model": settings.gemini_model},
+        )
         provider = _UnavailableGeminiProvider()
     cache_args = {
         "max_entries": settings.cache_max_entries,

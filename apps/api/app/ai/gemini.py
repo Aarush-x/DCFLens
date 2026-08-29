@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import socket
 from dataclasses import dataclass
@@ -13,18 +14,42 @@ from app.ai.models import ProviderRequest
 
 GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 MODEL_PATTERN = re.compile(r"^gemini-[a-z0-9.-]+$")
+SAFE_PROVIDER_TOKEN_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+MAX_PROVIDER_ERROR_BYTES = 16_384
+logger = logging.getLogger(__name__)
 
 
 class GeminiProviderError(RuntimeError):
     """Safe provider failure that excludes response bodies and credentials."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        fallback_reason: str = "provider_failure",
+        http_status: int | None = None,
+        provider_status: str | None = None,
+        provider_reason: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.fallback_reason = fallback_reason
+        self.http_status = http_status
+        self.provider_status = provider_status
+        self.provider_reason = provider_reason
+
 
 class GeminiTimeoutError(GeminiProviderError):
     """Gemini did not complete within the configured timeout."""
 
+    def __init__(self, message: str, **diagnostics: object) -> None:
+        super().__init__(message, fallback_reason="provider_timeout", **diagnostics)
+
 
 class GeminiRateLimitError(GeminiProviderError):
     """Gemini rejected the request because its quota or rate limit was reached."""
+
+    def __init__(self, message: str, **diagnostics: object) -> None:
+        super().__init__(message, fallback_reason="provider_rate_limit", **diagnostics)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,19 +123,52 @@ class GeminiClient:
             ) as response:
                 payload_bytes = response.read(self._config.max_response_bytes + 1)
         except (TimeoutError, socket.timeout) as exc:
+            self._log_failure("provider_timeout")
             raise GeminiTimeoutError("Gemini request timed out") from exc
         except HTTPError as exc:
-            if exc.code == 429:
-                raise GeminiRateLimitError("Gemini request was rate limited") from exc
+            provider_status, provider_reason = _provider_error_tokens(exc)
+            fallback_reason = _classify_http_failure(
+                exc.code, provider_status, provider_reason
+            )
+            self._log_failure(
+                fallback_reason,
+                http_status=exc.code,
+                provider_status=provider_status,
+                provider_reason=provider_reason,
+            )
+            diagnostics = {
+                "http_status": exc.code,
+                "provider_status": provider_status,
+                "provider_reason": provider_reason,
+            }
+            if fallback_reason == "provider_rate_limit":
+                raise GeminiRateLimitError(
+                    "Gemini request was rate limited", **diagnostics
+                ) from exc
+            if fallback_reason == "provider_timeout":
+                raise GeminiTimeoutError(
+                    "Gemini request timed out", **diagnostics
+                ) from exc
             raise GeminiProviderError(
-                f"Gemini request failed with HTTP status {exc.code}"
+                f"Gemini request failed with HTTP status {exc.code}",
+                fallback_reason=fallback_reason,
+                **diagnostics,
             ) from exc
         except URLError as exc:
             if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+                self._log_failure("provider_timeout")
                 raise GeminiTimeoutError("Gemini request timed out") from exc
-            raise GeminiProviderError("Gemini request failed") from exc
+            self._log_failure("provider_unavailable")
+            raise GeminiProviderError(
+                "Gemini request failed",
+                fallback_reason="provider_unavailable",
+            ) from exc
         except OSError as exc:
-            raise GeminiProviderError("Gemini request failed") from exc
+            self._log_failure("provider_unavailable")
+            raise GeminiProviderError(
+                "Gemini request failed",
+                fallback_reason="provider_unavailable",
+            ) from exc
 
         if len(payload_bytes) > self._config.max_response_bytes:
             raise GeminiProviderError("Gemini response exceeded the configured size limit")
@@ -122,3 +180,74 @@ class GeminiClient:
         if not isinstance(text, str) or not text.strip():
             raise GeminiProviderError("Gemini returned no structured response text")
         return text
+
+    def _log_failure(
+        self,
+        fallback_reason: str,
+        *,
+        http_status: int | None = None,
+        provider_status: str | None = None,
+        provider_reason: str | None = None,
+    ) -> None:
+        logger.warning(
+            "gemini_request_failed",
+            extra={
+                "fallback_reason": fallback_reason,
+                "http_status": http_status,
+                "provider_status": provider_status,
+                "provider_reason": provider_reason,
+                "gemini_model": self._config.model,
+            },
+        )
+
+
+def _provider_error_tokens(error: HTTPError) -> tuple[str | None, str | None]:
+    try:
+        raw = error.read(MAX_PROVIDER_ERROR_BYTES + 1)
+        if len(raw) > MAX_PROVIDER_ERROR_BYTES:
+            return None, None
+        payload = json.loads(raw)
+        error_payload = payload.get("error", {})
+        status = _safe_provider_token(error_payload.get("status"))
+        details = error_payload.get("details", [])
+        reason = None
+        if isinstance(details, list):
+            for detail in details:
+                if isinstance(detail, dict):
+                    reason = _safe_provider_token(detail.get("reason"))
+                    if reason:
+                        break
+        return status, reason
+    except (AttributeError, json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None, None
+
+
+def _safe_provider_token(value: object) -> str | None:
+    if isinstance(value, str) and SAFE_PROVIDER_TOKEN_PATTERN.fullmatch(value):
+        return value
+    return None
+
+
+def _classify_http_failure(
+    status_code: int,
+    provider_status: str | None,
+    provider_reason: str | None,
+) -> str:
+    if provider_reason in {"API_KEY_INVALID", "API_KEY_SERVICE_BLOCKED"}:
+        return "provider_authentication"
+    if status_code == 429 or provider_status == "RESOURCE_EXHAUSTED":
+        return "provider_rate_limit"
+    if status_code in {408, 504} or provider_status == "DEADLINE_EXCEEDED":
+        return "provider_timeout"
+    if status_code == 400 or provider_status == "INVALID_ARGUMENT":
+        return "provider_invalid_request"
+    if status_code in {401, 403} or provider_status in {
+        "PERMISSION_DENIED",
+        "UNAUTHENTICATED",
+    }:
+        return "provider_authentication"
+    if status_code == 404 or provider_status == "NOT_FOUND":
+        return "provider_model_unavailable"
+    if status_code >= 500 or provider_status == "UNAVAILABLE":
+        return "provider_unavailable"
+    return "provider_failure"

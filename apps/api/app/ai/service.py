@@ -93,9 +93,9 @@ def run_qualitative_analysis(
             baseline_valuation,
             deterministic_checklist,
         )
-    except GeminiProviderError:
+    except GeminiProviderError as exc:
         return _fallback_result(
-            "provider_failure",
+            exc.fallback_reason,
             baseline,
             baseline_valuation,
             deterministic_checklist,
