@@ -15,7 +15,9 @@ from app.ai.models import ProviderRequest
 GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 MODEL_PATTERN = re.compile(r"^gemini-[a-z0-9.-]+$")
 SAFE_PROVIDER_TOKEN_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+GOOGLE_API_KEY_PATTERN = re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b")
 MAX_PROVIDER_ERROR_BYTES = 16_384
+MAX_PROVIDER_MESSAGE_CHARS = 500
 logger = logging.getLogger(__name__)
 
 
@@ -101,7 +103,7 @@ class GeminiClient:
                 ],
                 "generationConfig": {
                     "responseMimeType": "application/json",
-                    "responseSchema": request.response_schema,
+                    "responseJsonSchema": request.response_schema,
                     "temperature": 0.1,
                     "maxOutputTokens": 4096,
                 },
@@ -126,7 +128,9 @@ class GeminiClient:
             self._log_failure("provider_timeout")
             raise GeminiTimeoutError("Gemini request timed out") from exc
         except HTTPError as exc:
-            provider_status, provider_reason = _provider_error_tokens(exc)
+            provider_status, provider_reason, provider_message = (
+                _provider_error_details(exc, self._config.api_key)
+            )
             fallback_reason = _classify_http_failure(
                 exc.code, provider_status, provider_reason
             )
@@ -135,6 +139,7 @@ class GeminiClient:
                 http_status=exc.code,
                 provider_status=provider_status,
                 provider_reason=provider_reason,
+                provider_message=provider_message,
             )
             diagnostics = {
                 "http_status": exc.code,
@@ -188,6 +193,7 @@ class GeminiClient:
         http_status: int | None = None,
         provider_status: str | None = None,
         provider_reason: str | None = None,
+        provider_message: str | None = None,
     ) -> None:
         logger.warning(
             "gemini_request_failed",
@@ -196,19 +202,24 @@ class GeminiClient:
                 "http_status": http_status,
                 "provider_status": provider_status,
                 "provider_reason": provider_reason,
+                "provider_message": provider_message,
                 "gemini_model": self._config.model,
             },
         )
 
 
-def _provider_error_tokens(error: HTTPError) -> tuple[str | None, str | None]:
+def _provider_error_details(
+    error: HTTPError,
+    api_key: str,
+) -> tuple[str | None, str | None, str | None]:
     try:
         raw = error.read(MAX_PROVIDER_ERROR_BYTES + 1)
         if len(raw) > MAX_PROVIDER_ERROR_BYTES:
-            return None, None
+            return None, None, None
         payload = json.loads(raw)
         error_payload = payload.get("error", {})
         status = _safe_provider_token(error_payload.get("status"))
+        message = _sanitize_provider_message(error_payload.get("message"), api_key)
         details = error_payload.get("details", [])
         reason = None
         if isinstance(details, list):
@@ -217,15 +228,27 @@ def _provider_error_tokens(error: HTTPError) -> tuple[str | None, str | None]:
                     reason = _safe_provider_token(detail.get("reason"))
                     if reason:
                         break
-        return status, reason
+        return status, reason, message
     except (AttributeError, json.JSONDecodeError, OSError, TypeError, ValueError):
-        return None, None
+        return None, None, None
 
 
 def _safe_provider_token(value: object) -> str | None:
     if isinstance(value, str) and SAFE_PROVIDER_TOKEN_PATTERN.fullmatch(value):
         return value
     return None
+
+
+def _sanitize_provider_message(value: object, api_key: str) -> str | None:
+    if not isinstance(value, str):
+        return None
+    message = " ".join(value.split())
+    if api_key:
+        message = message.replace(api_key, "[REDACTED]")
+    message = GOOGLE_API_KEY_PATTERN.sub("[REDACTED]", message)
+    if not message:
+        return None
+    return message[:MAX_PROVIDER_MESSAGE_CHARS]
 
 
 def _classify_http_failure(

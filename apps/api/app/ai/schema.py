@@ -28,35 +28,35 @@ MAX_EVIDENCE_IDS_PER_CLAIM = 12
 
 
 GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
-    "type": "OBJECT",
+    "type": "object",
     "additionalProperties": False,
     "properties": {
         "adjustments": {
-            "type": "ARRAY",
+            "type": "array",
             "minItems": 3,
             "maxItems": 3,
             "items": {
-                "type": "OBJECT",
+                "type": "object",
                 "additionalProperties": False,
                 "properties": {
                     "assumption": {
-                        "type": "STRING",
+                        "type": "string",
                         "enum": list(AI_ADJUSTMENT_BOUNDS),
                     },
                     "adjustment": {
-                        "type": "NUMBER",
+                        "type": "number",
                         "minimum": -0.03,
                         "maximum": 0.03,
                     },
-                    "rationale": {"type": "STRING"},
+                    "rationale": {"type": "string"},
                     "evidence_ids": {
-                        "type": "ARRAY",
+                        "type": "array",
                         "minItems": 1,
                         "maxItems": MAX_EVIDENCE_IDS_PER_CLAIM,
-                        "items": {"type": "STRING"},
+                        "items": {"type": "string"},
                     },
                     "claim_type": {
-                        "type": "STRING",
+                        "type": "string",
                         "enum": [ClaimType.ASSUMPTION.value],
                     },
                 },
@@ -70,27 +70,27 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
             },
         },
         "evidence_assessment": {
-            "type": "ARRAY",
+            "type": "array",
             "minItems": 1,
             "maxItems": 20,
             "items": {
-                "type": "OBJECT",
+                "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "statement": {"type": "STRING"},
+                    "statement": {"type": "string"},
                     "claim_type": {
-                        "type": "STRING",
+                        "type": "string",
                         "enum": [item.value for item in ClaimType],
                     },
                     "support": {
-                        "type": "STRING",
+                        "type": "string",
                         "enum": [item.value for item in EvidenceSupport],
                     },
                     "evidence_ids": {
-                        "type": "ARRAY",
+                        "type": "array",
                         "minItems": 1,
                         "maxItems": MAX_EVIDENCE_IDS_PER_CLAIM,
-                        "items": {"type": "STRING"},
+                        "items": {"type": "string"},
                     },
                 },
                 "required": [
@@ -102,30 +102,30 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
             },
         },
         "checklist_findings": {
-            "type": "ARRAY",
+            "type": "array",
             "maxItems": 10,
             "items": {
-                "type": "OBJECT",
+                "type": "object",
                 "additionalProperties": False,
                 "properties": {
                     "checklist_number": {
-                        "type": "INTEGER",
+                        "type": "integer",
                         "minimum": 1,
                         "maximum": 10,
                     },
                     "status": {
-                        "type": "STRING",
+                        "type": "string",
                         "enum": [item.value for item in ChecklistStatus],
                     },
-                    "explanation": {"type": "STRING"},
+                    "explanation": {"type": "string"},
                     "evidence_ids": {
-                        "type": "ARRAY",
+                        "type": "array",
                         "minItems": 1,
                         "maxItems": MAX_EVIDENCE_IDS_PER_CLAIM,
-                        "items": {"type": "STRING"},
+                        "items": {"type": "string"},
                     },
                     "claim_type": {
-                        "type": "STRING",
+                        "type": "string",
                         "enum": [ClaimType.INTERPRETATION.value],
                     },
                 },
@@ -139,15 +139,15 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
             },
         },
         "disagreement_summary": {
-            "type": "OBJECT",
+            "type": "object",
             "additionalProperties": False,
             "properties": {
-                "summary": {"type": "STRING"},
+                "summary": {"type": "string"},
                 "evidence_ids": {
-                    "type": "ARRAY",
+                    "type": "array",
                     "minItems": 1,
                     "maxItems": MAX_EVIDENCE_IDS_PER_CLAIM,
-                    "items": {"type": "STRING"},
+                    "items": {"type": "string"},
                 },
             },
             "required": ["summary", "evidence_ids"],

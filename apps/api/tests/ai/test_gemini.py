@@ -56,7 +56,7 @@ def test_gemini_client_sends_structured_output_schema_and_header() -> None:
     request = ProviderRequest(
         system_instruction="system",
         prompt="prompt",
-        response_schema={"type": "OBJECT", "properties": {}},
+        response_schema={"type": "object", "properties": {}},
     )
 
     text = client.generate(request)
@@ -67,7 +67,9 @@ def test_gemini_client_sends_structured_output_schema_and_header() -> None:
     assert captured["timeout"] == 17.0
     assert http_request.get_header("X-goog-api-key") == "secret-placeholder"
     assert body["generationConfig"]["responseMimeType"] == "application/json"
-    assert body["generationConfig"]["responseSchema"] == request.response_schema
+    assert body["generationConfig"]["responseJsonSchema"] == request.response_schema
+    assert "responseSchema" not in body["generationConfig"]
+    assert request.response_schema["type"] == "object"
     assert body["systemInstruction"]["parts"][0]["text"] == "system"
 
 
@@ -140,7 +142,7 @@ def test_gemini_client_logs_safe_http_diagnostics_without_response_message(
             "error": {
                 "code": status_code,
                 "status": provider_status,
-                "message": "sensitive provider detail must not be logged",
+                "message": "Request schema was rejected at generationConfig.responseSchema",
             }
         }
     ).encode()
@@ -169,7 +171,7 @@ def test_gemini_client_logs_safe_http_diagnostics_without_response_message(
     assert caplog.records[-1].http_status == status_code
     assert caplog.records[-1].provider_status == provider_status
     assert caplog.records[-1].fallback_reason == expected_reason
-    assert "sensitive" not in caplog.text
+    assert "Request schema was rejected" in caplog.records[-1].provider_message
     assert "secret-placeholder" not in caplog.text
 
 
@@ -208,3 +210,36 @@ def test_gemini_client_prioritizes_safe_api_key_reason_over_http_400() -> None:
 
     assert error.value.fallback_reason == "provider_authentication"
     assert error.value.provider_reason == "API_KEY_INVALID"
+
+
+def test_gemini_client_redacts_api_key_from_logged_provider_message(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    api_key = "secret-placeholder"
+    provider_body = json.dumps(
+        {
+            "error": {
+                "code": 400,
+                "status": "INVALID_ARGUMENT",
+                "message": f"Invalid API key: {api_key}",
+            }
+        }
+    ).encode()
+
+    def opener(*args: object, **kwargs: object):
+        raise HTTPError(
+            "https://generativelanguage.googleapis.com/redacted",
+            400,
+            "bad request",
+            hdrs=None,
+            fp=BytesIO(provider_body),
+        )
+
+    client = GeminiClient(GeminiClientConfig(api_key=api_key), opener=opener)
+
+    with caplog.at_level("WARNING", logger="app.ai.gemini"):
+        with pytest.raises(GeminiProviderError):
+            client.generate(ProviderRequest("system", "prompt", {"type": "object"}))
+
+    assert api_key not in caplog.text
+    assert "[REDACTED]" in caplog.records[-1].provider_message
