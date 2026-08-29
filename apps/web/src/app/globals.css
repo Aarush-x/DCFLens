@@ -22,6 +22,7 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  --space-10: 2.5rem;
   --space-12: 3rem;
   --space-16: 4rem;
   --space-24: 6rem;
@@ -800,6 +801,62 @@ h3.disclosure__title { margin: 0; font-size: 1.0625rem; font-weight: 650; line-h
 }
 .fixture-index__lede { max-width: 56ch; margin-top: var(--space-5); color: var(--ink-muted); font-size: 1.0625rem; line-height: 1.55; }
 
+/* Live API request and result states. These remain linear research-note
+   sections rather than introducing a parallel dashboard-card language. */
+.analysis-request-state {
+  display: flex;
+  width: min(100% - 3rem, 72rem);
+  min-height: 7rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-inline: auto;
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--line);
+}
+.analysis-request-state h2 { margin-top: var(--space-2); font-size: 1.25rem; letter-spacing: -0.025em; }
+.analysis-request-state p:not(.section-index, .request-id) { margin-top: var(--space-2); color: var(--ink-muted); font-size: 0.875rem; }
+.analysis-request-state--working { border-bottom-color: var(--accent); }
+.analysis-request-state--success { border-bottom-color: var(--supports); }
+.analysis-request-state--warning { border-bottom-color: var(--monitor); }
+.analysis-request-state--error { border-bottom-color: var(--weakens); }
+.request-id { margin-top: var(--space-2); color: var(--ink-muted); font-size: 0.6875rem; }
+.request-progress { width: min(12rem, 28vw); height: 2px; overflow: hidden; background: var(--line); }
+.request-progress span { display: block; width: 45%; height: 100%; background: var(--accent); animation: request-progress 1.2s ease-in-out infinite alternate; }
+@keyframes request-progress { from { transform: translateX(-10%); } to { transform: translateX(140%); } }
+
+.analysis-empty {
+  width: min(100% - 3rem, 72rem);
+  min-height: 55svh;
+  margin-inline: auto;
+  padding-block: clamp(5rem, 10vw, 10rem);
+}
+.analysis-empty h1 { max-width: 14ch; min-height: 0; font-size: clamp(3rem, 7vw, 6rem); }
+.analysis-empty p { max-width: 40rem; margin-top: var(--space-6); color: var(--ink-muted); font-size: 1.0625rem; }
+.live-analysis { padding-top: var(--space-8); }
+.request-notice { margin-bottom: var(--space-12); padding: var(--space-6) 0; border-top: 2px solid var(--monitor); border-bottom: 1px solid var(--line); }
+.request-notice h2 { margin-top: var(--space-3); font-size: clamp(1.75rem, 4vw, 3rem); }
+.request-notice > p:not(.section-index) { max-width: 58rem; margin-top: var(--space-3); color: var(--ink-muted); }
+.request-notice__detail { font-family: var(--font-data); font-size: 0.75rem; }
+.live-section { padding-block: clamp(4rem, 8vw, 7rem); border-top: 1px solid var(--line); }
+.live-section > h2 { max-width: 16ch; margin-top: var(--space-4); font-size: clamp(2.25rem, 5vw, 4.5rem); line-height: 1; }
+.live-section__lede { max-width: 54rem; margin-top: var(--space-6); color: var(--ink-muted); font-size: 1.0625rem; }
+.live-section__note { max-width: 52rem; margin-top: var(--space-6); color: var(--ink-muted); font-size: 0.875rem; }
+.live-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: var(--space-12); border-top: 2px solid var(--ink); }
+.live-metric-grid > div { min-height: 7.5rem; padding: var(--space-4); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.live-metric-grid > div:nth-child(4n) { border-right: 0; }
+.live-metric-grid dt { color: var(--ink-muted); font-size: 0.75rem; }
+.live-metric-grid dd { margin-top: var(--space-6); font-size: clamp(1rem, 2vw, 1.35rem); overflow-wrap: anywhere; }
+.live-checklist { margin-top: var(--space-12); }
+.live-checklist .citation { margin-top: var(--space-4); }
+.evidence-assessment-list { margin-top: var(--space-10); padding: 0; border-top: 2px solid var(--ink); list-style: none; }
+.evidence-assessment-list > li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.7fr); gap: var(--space-8); padding: var(--space-6) 0; border-bottom: 1px solid var(--line); }
+.evidence-assessment-list > li > div > p:last-child { margin-top: var(--space-2); }
+.live-filing dl { margin: var(--space-10) 0 var(--space-8); border-top: 2px solid var(--ink); }
+.live-filing dl > div { display: grid; grid-template-columns: 10rem minmax(0, 1fr); gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.live-filing dt { color: var(--ink-muted); font-size: 0.8125rem; }
+.live-filing dd { overflow-wrap: anywhere; font-size: 0.875rem; }
+
 @media (max-width: 64rem) {
   .verdict__figures { grid-template-columns: 1fr 1fr; }
   .verdict__figures > div:first-child { grid-column: 1 / -1; }
@@ -807,6 +864,9 @@ h3.disclosure__title { margin: 0; font-size: 1.0625rem; font-weight: 650; line-h
   .callout__conflicts li { grid-template-columns: 5rem minmax(0, 1fr); }
   .callout__conflict-verdicts { grid-column: 2; }
   .full-checklist__detail > div { grid-template-columns: 11rem minmax(0, 1fr); }
+  .live-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .live-metric-grid > div:nth-child(4n) { border-right: 1px solid var(--line); }
+  .live-metric-grid > div:nth-child(2n) { border-right: 0; }
 }
 
 @media (max-width: 48rem) {
@@ -828,4 +888,11 @@ h3.disclosure__title { margin: 0; font-size: 1.0625rem; font-weight: 650; line-h
   .source-links li { grid-template-columns: 1fr; gap: var(--space-2); }
   .mini-ledger > div { grid-template-columns: 1fr; gap: var(--space-1); }
   .mini-ledger dd { text-align: left; }
+  .analysis-request-state { width: min(100% - 2rem, 72rem); align-items: flex-start; flex-direction: column; }
+  .request-progress { width: 100%; }
+  .analysis-empty { width: min(100% - 2rem, 72rem); }
+  .live-metric-grid { grid-template-columns: 1fr; }
+  .live-metric-grid > div, .live-metric-grid > div:nth-child(2n), .live-metric-grid > div:nth-child(4n) { border-right: 0; }
+  .evidence-assessment-list > li { grid-template-columns: 1fr; gap: var(--space-4); }
+  .live-filing dl > div { grid-template-columns: 1fr; gap: var(--space-1); }
 }

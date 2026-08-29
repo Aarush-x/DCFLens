@@ -20,6 +20,7 @@ The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized F
 | [AI trust boundaries](docs/ai-trust-boundaries.md) | What Gemini may do, what it may not do, and required safeguards |
 | [Gemini trust model](docs/trust-model.md) | Implemented structured-output, evidence, adjustment, fallback, and confidence contract |
 | [FastAPI service layer](docs/api-service.md) | Analyze endpoint, errors, CORS, caching, concurrency, logging, and runtime behavior |
+| [Frontend/backend integration](docs/frontend-backend-integration.md) | API URL resolution, cold-start recovery, cancellation, UI states, and deployment configuration |
 | [Evidence provenance](docs/evidence-provenance.md) | Source identity, locators, transformation records, and claim citation rules |
 | [DeltaDCF 10-point checklist](docs/deltadcf-checklist.md) | The reference checklist preserved unchanged |
 | [DeltaDCF comparison](docs/deltadcf-comparison.md) | Reusable patterns, coupled details, and DCFLens redesigns |
@@ -67,7 +68,27 @@ cp apps/api/.env.example apps/api/.env
 
 The API loads `apps/api/.env` for local development. Docker excludes every `.env` file, and deployed values must come from Render's environment configuration.
 
-Next.js uses `http://localhost:8000` only as the development fallback. Vercel production and preview deployments must set `NEXT_PUBLIC_API_URL`. Production builds fail clearly when it is missing.
+Start the backend and frontend in separate terminals:
+
+```bash
+# Terminal 1, from the repository root
+make dev-api
+
+# Terminal 2, from the repository root
+make dev-web
+```
+
+Open `http://localhost:3000`, enter a ticker, and the browser calls
+`http://localhost:8000` through the centralized API client. Next.js uses this
+localhost origin only outside production. Vercel Production and Preview builds
+must set `NEXT_PUBLIC_API_URL` to the Render API origin. The page displays an
+explicit configuration error if the production variable is absent.
+
+The client checks `GET /health` before analysis. A sleeping Render free-tier
+service stays in a bounded, recoverable “Backend waking up” state. Once healthy,
+the UI changes to “Analysis running” for `GET /api/analyze/{ticker}`. Provider,
+SEC, rate-limit, unsupported-ticker, timeout, and configuration outcomes remain
+distinct, and a retry keeps the last valid result visible.
 
 ## Deployment scaffold
 
@@ -86,6 +107,7 @@ Next.js uses `http://localhost:8000` only as the development fallback. Vercel pr
 - Production-oriented Docker and Render configuration
 - Gemini structured-output client and domain orchestration with strict Python validation and deterministic fallback
 - FastAPI `GET /api/analyze/{ticker}` orchestration with sanitized errors, structured logs, bounded caches, and duplicate suppression
-- Filing-section text extraction and frontend integration remain unimplemented
+- The Next.js analysis route is connected to FastAPI through one bounded,
+  cancellable client with Render cold-start recovery and sanitized error mapping
 - No deployment performed
 - No remote repository changes made

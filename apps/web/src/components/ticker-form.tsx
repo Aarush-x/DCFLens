@@ -1,34 +1,36 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { fixtureTickers } from "@/fixtures/analysis";
 
 export function TickerForm() {
   const router = useRouter();
   const [ticker, setTicker] = useState("AAPL");
   const [message, setMessage] = useState("");
+  const submissionInFlight = useRef(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submissionInFlight.current) {
+      return;
+    }
     const normalizedTicker = ticker.trim().toUpperCase();
 
     if (!normalizedTicker) {
       setMessage("Enter a ticker symbol to continue.");
       return;
     }
-    if (!fixtureTickers.includes(normalizedTicker)) {
-      setMessage(
-        `${normalizedTicker} is not in this fixture preview. Available: ${fixtureTickers.join(", ")}.`,
-      );
+    if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(normalizedTicker)) {
+      setMessage("Use up to 10 letters, numbers, periods, or hyphens.");
       return;
     }
 
-    setMessage(`Opening the ${normalizedTicker} fixture analysis.`);
-    router.push(`/analysis/${normalizedTicker}`);
+    submissionInFlight.current = true;
+    setMessage(`Opening the ${normalizedTicker.replaceAll(".", "-")} analysis.`);
+    router.push(`/analysis/${encodeURIComponent(normalizedTicker.replaceAll(".", "-"))}`);
   }
 
   return (
@@ -45,9 +47,9 @@ export function TickerForm() {
         spellCheck={false}
         value={ticker}
       />
-      <Button type="submit">Open analysis</Button>
+      <Button type="submit">Analyze ticker</Button>
       <p className="form-message" aria-live="polite">
-        {message || `Fixture mode · ${fixtureTickers.join(", ")}`}
+        {message || "Live SEC evidence · deterministic valuation · bounded AI review"}
       </p>
     </form>
   );
