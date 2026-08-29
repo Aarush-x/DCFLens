@@ -11,7 +11,7 @@ Browser
   v
 apps/web (Next.js on Vercel)
   |
-  | NEXT_PUBLIC_API_BASE_URL
+  | NEXT_PUBLIC_API_URL
   v
 apps/api (FastAPI in Docker on Render)
   |-- SEC adapter --------> SEC Company Facts and filings
@@ -21,16 +21,16 @@ apps/api (FastAPI in Docker on Render)
   `-- Gemini adapter -----> structured qualitative findings
 ```
 
-## Proposed repository layout
+## Repository layout
 
 ```text
 DCFLens/
 ├── apps/
 │   ├── web/
-│   │   ├── app/                    # Next.js App Router pages and layouts
-│   │   ├── components/             # Analysis, evidence, and scenario UI
-│   │   ├── lib/                    # API client and browser-safe helpers
-│   │   ├── public/
+│   │   ├── src/app/                # Next.js App Router pages and layouts
+│   │   ├── src/components/         # Added with analysis and evidence UI
+│   │   ├── src/lib/                # Central URL config; future API client
+│   │   ├── public/                 # Added when static assets exist
 │   │   ├── .env.example
 │   │   ├── next.config.ts
 │   │   ├── package.json
@@ -48,17 +48,17 @@ DCFLens/
 │       ├── .env.example
 │       ├── Dockerfile
 │       ├── pyproject.toml
-│       └── requirements.lock       # Only if a lockfile strategy requires it
-├── packages/
-│   └── shared/                     # Justified only for generated contracts
+│       ├── requirements.txt        # Production dependencies only
+│       └── requirements-dev.txt    # Local tests and tooling
+├── packages/                       # Deferred until a real shared contract exists
 ├── docs/
 ├── .dockerignore
-├── package.json                    # Workspace commands, if a JS workspace is used
+├── package.json                    # JavaScript workspace commands
 ├── render.yaml
 └── README.md
 ```
 
-`packages/shared` should not contain Python business logic copied into TypeScript. It is justified for a versioned JSON Schema or OpenAPI-derived TypeScript types shared with `apps/web`. The FastAPI models remain the authoritative runtime contract.
+`packages/shared` is deferred in the scaffold because no shared contract exists yet. It should not contain Python business logic copied into TypeScript. It becomes justified for a versioned JSON Schema or OpenAPI-derived TypeScript types shared with `apps/web`. The FastAPI models remain the authoritative runtime contract.
 
 ## Component responsibilities
 

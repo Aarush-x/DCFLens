@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: dcflens-api
+    runtime: docker
+    plan: free
+    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CACHE_TTL_SECONDS
+        value: "900"
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: SEC_IDENTITY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

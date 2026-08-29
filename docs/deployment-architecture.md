@@ -8,7 +8,7 @@ User browser
     v
 Vercel: apps/web (Next.js)
     |
-    | HTTPS to NEXT_PUBLIC_API_BASE_URL
+    | HTTPS to NEXT_PUBLIC_API_URL
     v
 Render: apps/api (Docker web service)
     |-- SEC EDGAR
@@ -19,7 +19,7 @@ The Vercel and Render projects remain separately deployable. `render.yaml` lives
 
 ## Render backend
 
-The planned Blueprint retains the useful DeltaDCF shape:
+The repository-root Blueprint retains the useful DeltaDCF shape:
 
 - `runtime: docker`
 - `dockerContext: .`
@@ -27,9 +27,11 @@ The planned Blueprint retains the useful DeltaDCF shape:
 - `healthCheckPath: /health`
 - `autoDeployTrigger: checksPass`
 
-The container should use a slim pinned Python base, install only runtime dependencies, copy `apps/api`, run as a non-root user, use `exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`, and provide a Docker health check that uses the standard library rather than installing `curl` only for health checks.
+The container uses a supported Python 3.12 slim Bookworm base, installs only runtime dependencies, copies only the API application, runs as a non-root user, uses `exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`, and provides a Docker health check with the Python standard library rather than installing `curl` only for health checks.
 
 ### Backend environment contract
+
+The scaffold implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `GOOGLE_API_KEY`, `CORS_ALLOWED_ORIGINS`, and `CACHE_TTL_SECONDS`. The remaining rows describe variables to add only with their corresponding features.
 
 | Variable | Exposure | Production rule |
 | --- | --- | --- |
@@ -51,7 +53,7 @@ An Alpha Vantage fallback is not assumed for DCFLens. If retained, `ALPHA_VANTAG
 
 Vercel should set the project Root Directory to `apps/web`. Next.js supplies its own routing and output behavior, so the DeltaDCF SPA rewrite file must not be copied.
 
-`NEXT_PUBLIC_API_BASE_URL` is the only planned browser-visible service URL. Production builds should fail when it is absent. All `NEXT_PUBLIC_*` values are public bundle data; provider credentials are forbidden.
+`NEXT_PUBLIC_API_URL` is the only planned browser-visible service URL. Production builds fail when it is absent. All `NEXT_PUBLIC_*` values are public bundle data; provider credentials are forbidden.
 
 Preview deployments require a CORS decision. The safest default is to permit only the production frontend origin. If previews need live API access, use a narrowly anchored allowlist or a controlled preview proxy. Do not copy permissive wildcard or broad regex behavior.
 
@@ -80,7 +82,7 @@ Before deployment is considered ready, CI should run:
 4. Container start followed by `/health` verification.
 5. Secret and dependency scans appropriate to the repository.
 
-These are planned gates, not verified results in the current documentation-only repository.
+The scaffold phase executes these checks locally where tooling is available. They become required CI gates when CI is introduced; passing scaffold checks is not proof of a deployed system.
 
 ## Rollback model
 

@@ -51,7 +51,7 @@ DCFLens retains DeltaDCF's transparent DCF, checklist, SEC-first approach, FastA
 
 - Preserve evidence metadata through normalization.
 - Use FastAPI models and generated frontend types rather than manually duplicated shapes.
-- Use `NEXT_PUBLIC_API_BASE_URL` for the public backend origin.
+- Use `NEXT_PUBLIC_API_URL` for the public backend origin.
 - Configure Gemini model selection and record it per analysis.
 - Require valid evidence IDs in AI output.
 - Make `UNKNOWN` a first-class checklist status.

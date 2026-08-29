@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# JavaScript and Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Environment files and local platform state
+.env
+.env.*
+!.env.example
+.vercel/
+
+# IDEs and logs
+.idea/
+.vscode/
+*.log
+npm-debug.log*
