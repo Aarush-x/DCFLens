@@ -39,3 +39,5 @@ The prototype caches are in memory. They are cleared on restart, are not shared 
 ## Runtime
 
 Local execution remains `cd apps/api && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`. The Docker image starts with `python -m app`; `app.__main__` binds `0.0.0.0`, reads Render's `PORT`, and defaults to `8000` locally. Both paths import the same `app.main:app` object.
+
+The Docker entry point gives Uvicorn 25 seconds to drain in-flight requests after `SIGTERM`. The Render Blueprint allows 30 seconds before forced termination, leaving a five-second margin for process teardown. The service runs one Uvicorn process so bounded process-local caches and duplicate suppression do not multiply within the prototype container.

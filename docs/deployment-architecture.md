@@ -25,10 +25,13 @@ The repository-root Blueprint retains the useful DeltaDCF shape:
 - `dockerContext: .`
 - `dockerfilePath: ./apps/api/Dockerfile`
 - `healthCheckPath: /health`
+- `maxShutdownDelaySeconds: 30`
 - `autoDeployTrigger: checksPass`
-- `plan: free`, which the load targets below must revisit
+- `plan: free`, currently supported for Render web services and appropriate only for this prototype
 
 The container uses a supported Python 3.12 slim Bookworm base, installs only runtime dependencies, copies only the API application, and runs as a non-root user. Its `python -m app` entry point imports `app.main:app`, binds `0.0.0.0`, respects Render's `PORT`, and defaults to port `8000`. The Docker health check uses the Python standard library rather than installing `curl` only for health checks.
+
+Render sends `SIGTERM` during replacement and waits up to the Blueprint's 30-second shutdown delay. Uvicorn's 25-second graceful-shutdown timeout drains ordinary in-flight work while leaving a five-second process-exit margin. The deployed cache cap is 16 entries per bounded cache, lower than the development default, to limit retained SEC documents and analysis objects on the free web service's 512 MB instance. This is a prototype capacity choice, not a production load target.
 
 ### Backend environment contract
 
@@ -106,3 +109,4 @@ The scaffold phase executes these checks locally where tooling is available. The
 - In-memory caches reset on restart and do not coordinate across instances.
 - Vercel preview origins and Render CORS need an explicit access policy.
 - Provider quotas, cold starts, retries, and concurrency limits need load targets. The Blueprint currently pins the free plan, which sleeps when idle and is not a reviewed capacity decision.
+- Render documents Free instances as preview/hobby infrastructure rather than production infrastructure. A paid instance, measured request latency, and a durable/shared cache remain prerequisites for a production service-level objective.

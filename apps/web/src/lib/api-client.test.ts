@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   analyzeTicker,
@@ -8,11 +8,6 @@ import {
 } from "@/lib/api-client";
 import { backendPayloadFromFixture } from "@/test/live-analysis-fixture";
 
-const productionEnvironment = {
-  NODE_ENV: "production",
-  NEXT_PUBLIC_API_URL: "https://dcflens-api.example.com/",
-};
-
 function jsonResponse(body: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -21,6 +16,15 @@ function jsonResponse(body: unknown, status = 200, headers?: HeadersInit): Respo
 }
 
 describe("analyzeTicker", () => {
+  beforeEach(() => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://dcflens-api.example.com/");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("retries a bounded Render cold start before running analysis", async () => {
     const fetchImpl = vi
       .fn<FetchImplementation>()
@@ -31,7 +35,6 @@ describe("analyzeTicker", () => {
     const phases: Array<[string, number]> = [];
 
     const result = await analyzeTicker("aapl", {
-      environment: productionEnvironment,
       fetchImpl,
       sleep: async () => {},
       onPhase: (phase, attempt) => phases.push([phase, attempt]),
@@ -67,7 +70,7 @@ describe("analyzeTicker", () => {
       );
 
     await expect(
-      analyzeTicker("AAPL", { environment: productionEnvironment, fetchImpl }),
+      analyzeTicker("AAPL", { fetchImpl }),
     ).rejects.toMatchObject({ kind: expectedKind, options: { requestId: "request-123" } });
   });
 
@@ -80,7 +83,6 @@ describe("analyzeTicker", () => {
         }),
     );
     const request = analyzeTicker("AAPL", {
-      environment: productionEnvironment,
       fetchImpl,
       signal: controller.signal,
     });
@@ -96,7 +98,7 @@ describe("analyzeTicker", () => {
       .mockResolvedValueOnce(jsonResponse({ status: "ok" }))
       .mockResolvedValueOnce(jsonResponse(backendPayloadFromFixture()));
 
-    await analyzeTicker("AAPL", { environment: productionEnvironment, fetchImpl });
+    await analyzeTicker("AAPL", { fetchImpl });
 
     const serializedCalls = JSON.stringify(fetchImpl.mock.calls);
     expect(serializedCalls).not.toMatch(/GOOGLE_API_KEY|SEC_IDENTITY|GEMINI|Bearer/i);

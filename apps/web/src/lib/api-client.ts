@@ -44,7 +44,6 @@ export interface AnalyzeTickerOptions {
   healthAttempts?: number;
   healthTimeoutMs?: number;
   analysisTimeoutMs?: number;
-  environment?: Readonly<Record<string, string | undefined>>;
 }
 
 const DEFAULT_HEALTH_ATTEMPTS = 5;
@@ -59,7 +58,7 @@ export async function analyzeTicker(
   const ticker = normalizeTicker(rawTicker);
   let apiBaseUrl: string;
   try {
-    apiBaseUrl = getApiBaseUrl(options.environment);
+    apiBaseUrl = getApiBaseUrl();
   } catch (error) {
     throw new ApiClientError(
       "configuration",

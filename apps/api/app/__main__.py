@@ -9,7 +9,12 @@ from app.core.runtime import ServerConfig
 
 def main() -> None:
     server = ServerConfig.from_env(os.environ)
-    uvicorn.run("app.main:app", host=server.host, port=server.port)
+    uvicorn.run(
+        "app.main:app",
+        host=server.host,
+        port=server.port,
+        timeout_graceful_shutdown=25,
+    )
 
 
 if __name__ == "__main__":

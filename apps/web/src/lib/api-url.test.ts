@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getApiBaseUrl, normalizeApiUrl } from "./api-url";
 
@@ -20,24 +20,30 @@ describe("normalizeApiUrl", () => {
 });
 
 describe("getApiBaseUrl", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("uses the local development default outside production", () => {
-    expect(getApiBaseUrl({ NODE_ENV: "development" })).toBe(
-      "http://localhost:8000",
-    );
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+
+    expect(getApiBaseUrl()).toBe("http://localhost:8000");
   });
 
   it("requires an explicit production URL", () => {
-    expect(() => getApiBaseUrl({ NODE_ENV: "production" })).toThrow(
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+
+    expect(() => getApiBaseUrl()).toThrow(
       "NEXT_PUBLIC_API_URL is required for production",
     );
   });
 
   it("uses the configured URL in production", () => {
-    expect(
-      getApiBaseUrl({
-        NODE_ENV: "production",
-        NEXT_PUBLIC_API_URL: "https://dcflens-api.example.com/",
-      }),
-    ).toBe("https://dcflens-api.example.com");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://dcflens-api.example.com/");
+
+    expect(getApiBaseUrl()).toBe("https://dcflens-api.example.com");
   });
 });

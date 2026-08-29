@@ -25,10 +25,11 @@ The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized F
 | [DeltaDCF 10-point checklist](docs/deltadcf-checklist.md) | The reference checklist preserved unchanged |
 | [DeltaDCF comparison](docs/deltadcf-comparison.md) | Reusable patterns, coupled details, and DCFLens redesigns |
 | [Deployment mapping](docs/deployment-mapping.md) | File-by-file DeltaDCF to DCFLens classification |
+| [Production deployment runbook](docs/production-deployment.md) | Verified parity, configuration checks, exact dashboard order, smoke test, and rollback |
 
 ## Reference baseline
 
-The design was derived from DeltaDCF `main` at commit `d13b2ea24a4a8446373b3bde51f86aab136f8f27`, inspected on 2026-08-29. DeltaDCF is a reference, not a code template. Its checklist and deterministic valuation concepts are retained; its Vite layout, path assumptions, synchronous orchestration, process-local caches, and weak evidence locators are not adopted unchanged.
+The original design review used DeltaDCF `main` at commit `d13b2ea24a4a8446373b3bde51f86aab136f8f27`. The production-parity pass on 2026-08-29 separately inspected the local DeltaDCF `chore/production-deployment` working tree at HEAD `22e99fe`, including its uncommitted deployment files. DeltaDCF is a reference, not a code template or proof of deployment. Its checklist and deterministic valuation concepts are retained; its Vite layout, path assumptions, synchronous orchestration, process-local caches, and weak evidence locators are not adopted unchanged.
 
 ## Repository structure
 
@@ -98,6 +99,7 @@ distinct, and a retry keeps the last valid result visible.
 - Render Dockerfile: `apps/api/Dockerfile`
 - Liveness endpoint: `GET /health`
 - No database and no `vercel.json`
+- Bounded 30-second Render shutdown window with a 25-second Uvicorn drain timeout
 
 ## Current status
 

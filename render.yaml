@@ -6,6 +6,7 @@ services:
     dockerContext: .
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /health
+    maxShutdownDelaySeconds: 30
     autoDeployTrigger: checksPass
     envVars:
       - key: APP_ENV
@@ -15,7 +16,7 @@ services:
       - key: CACHE_TTL_SECONDS
         value: "900"
       - key: CACHE_MAX_ENTRIES
-        value: "128"
+        value: "16"
       - key: SEC_TIMEOUT_SECONDS
         value: "15"
       - key: SEC_MAX_RETRIES
