@@ -4,11 +4,11 @@
 
 DCFLens keeps valuation deterministic, inspectable, and separate from narrative analysis. The same input facts and scenario parameters must always produce the same numeric result. AI may propose a labeled scenario, but it does not own the baseline calculation.
 
-The implemented domain contract, exact units, validation ranges, machine-readable fields, stability rule, and sensitivity construction are specified in [dcf-engine.md](dcf-engine.md).
+The implemented domain contract, exact units, validation ranges, machine-readable fields, stability rule, and sensitivity construction are specified in [dcf-engine.md](dcf-engine.md). The company-specific, non-AI assumption policy is specified in [adaptive-baseline.md](adaptive-baseline.md).
 
-## DeltaDCF reference scenario
+## DeltaDCF historical regression scenario
 
-The initial reference scenario preserves DeltaDCF's published baseline so results can be compared during implementation:
+The regression suite preserves DeltaDCF's published baseline so deliberate formula changes can be detected:
 
 | Input | Reference value |
 | --- | ---: |
@@ -18,7 +18,7 @@ The initial reference scenario preserves DeltaDCF's published baseline so result
 | Terminal growth | 3% |
 | Discount rate | 9% |
 
-These are scenario assumptions, not universal estimates of a company's future. DCFLens must display them, allow reviewed alternatives, and never imply that the defaults are company-specific forecasts.
+These values are not DCFLens defaults and are not universal estimates of a company's future. Production baselines use versioned sector priors, normalized historical facts, cash-flow stability, maturity, and transparent risk modifiers. The historical 18% and 10% values remain test inputs only.
 
 ## Input definitions
 
@@ -53,7 +53,7 @@ FCF_t = FCF_(t-1) * (1 + g_t)
 PV(FCF_t) = FCF_t / (1 + r)^t
 ```
 
-The reference scenario uses `g_t = 18%` for years 1 through 5 and `10%` for years 6 through 10.
+The historical regression scenario uses `g_t = 18%` for years 1 through 5 and `10%` for years 6 through 10. An adaptive DCFLens baseline supplies company-specific stage rates to the same formula.
 
 ## Terminal value
 

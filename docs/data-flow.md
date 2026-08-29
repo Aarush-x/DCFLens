@@ -8,7 +8,7 @@
 3. API resolves ticker to issuer and CIK
 4. SEC adapter retrieves Company Facts and filing metadata
 5. Normalizer selects annual facts and records every transformation
-6. Valuation engine calculates the deterministic baseline
+6. Adaptive policy derives traced company assumptions; valuation engine calculates the deterministic baseline
 7. Checklist engine evaluates numeric rules from normalized facts
 8. Filing extractor collects bounded, labeled sections and Exhibit 21
 9. Gemini returns schema-constrained qualitative findings with evidence IDs
@@ -50,9 +50,11 @@ DCFLens must not copy DeltaDCF's final reduction to plain values because that di
 
 The implemented normalizer preserves comparative periods and every selected input as an `EvidenceReference`. Missing or conflicting facts remain explicit rather than becoming zero.
 
-### 5. Deterministic valuation
+### 5. Deterministic assumptions and valuation
 
-The valuation engine consumes only validated normalized facts and explicit scenario parameters. It returns projected cash flows, discount factors, terminal value, enterprise value, net debt, equity value, and per-share value. It also returns warnings for stale, missing, or lower-confidence inputs.
+The adaptive policy consumes company metadata and validated normalized facts. It classifies the business with ordered SIC and keyword rules, then combines versioned sector priors with bounded FCF growth, revenue growth, cash-flow stability, company maturity, and company-risk modifiers. Every input, weight, fallback, bound, confidence score, and evidence reference is returned in an assumption trace. AI has no role in this calculation.
+
+The valuation engine then consumes the resulting explicit assumptions. It returns projected cash flows, discount factors, terminal value, enterprise value, net debt, equity value, and per-share value. It also returns warnings for stale, missing, or lower-confidence inputs.
 
 ### 6. Checklist evaluation
 

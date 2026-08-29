@@ -1,0 +1,146 @@
+{
+  "version": "sector-priors-1.0.0",
+  "stage_durations": {
+    "stage_one_years": 5,
+    "stage_two_years": 5
+  },
+  "signal_weights": {
+    "sector_prior": 0.35,
+    "historical_fcf_growth": 0.40,
+    "revenue_growth": 0.25
+  },
+  "global_bounds": {
+    "fcf_growth_signal": [-0.25, 0.60],
+    "revenue_growth_signal": [-0.20, 0.40],
+    "stage_one_growth": [-0.10, 0.35],
+    "stage_two_growth": [-0.05, 0.15],
+    "terminal_growth": [0.01, 0.04],
+    "discount_rate": [0.06, 0.18],
+    "minimum_terminal_spread": 0.02
+  },
+  "maturity_modifiers": {
+    "emerging": {"maximum_years_public": 9, "stage_one": 0.015, "discount_rate": 0.010},
+    "established": {"maximum_years_public": 19, "stage_one": 0.000, "discount_rate": 0.000},
+    "mature": {"maximum_years_public": null, "stage_one": -0.015, "discount_rate": -0.005},
+    "unknown": {"maximum_years_public": null, "stage_one": 0.000, "discount_rate": 0.005}
+  },
+  "fcf_state_modifiers": {
+    "positive": {"stage_one": 0.000, "discount_rate": 0.000},
+    "newly_positive": {"stage_one": -0.010, "discount_rate": 0.010},
+    "negative": {"stage_one": -0.020, "discount_rate": 0.015},
+    "missing": {"stage_one": -0.010, "discount_rate": 0.008}
+  },
+  "risk_modifiers": {
+    "maximum_stage_one_stability_penalty": 0.015,
+    "stability_penalty_threshold": 0.70,
+    "maximum_discount_stability_premium": 0.020,
+    "maximum_discount_coverage_premium": 0.010,
+    "net_cash_discount_modifier": -0.003,
+    "moderate_leverage_threshold": 2.0,
+    "moderate_leverage_discount_modifier": 0.008,
+    "high_leverage_threshold": 5.0,
+    "high_leverage_discount_modifier": 0.015
+  },
+  "sectors": {
+    "technology": {
+      "display_name": "Technology",
+      "business_type": "technology products and services",
+      "stage_one_growth": 0.12,
+      "terminal_growth": 0.030,
+      "discount_rate": 0.100,
+      "stage_one_bounds": [-0.05, 0.30],
+      "discount_rate_bounds": [0.075, 0.160],
+      "stage_two_fade_fraction": 0.40
+    },
+    "retail": {
+      "display_name": "Consumer Retail",
+      "business_type": "retailer",
+      "stage_one_growth": 0.060,
+      "terminal_growth": 0.025,
+      "discount_rate": 0.095,
+      "stage_one_bounds": [-0.08, 0.18],
+      "discount_rate_bounds": [0.075, 0.155],
+      "stage_two_fade_fraction": 0.35
+    },
+    "financials": {
+      "display_name": "Financials",
+      "business_type": "financial institution",
+      "stage_one_growth": 0.050,
+      "terminal_growth": 0.025,
+      "discount_rate": 0.090,
+      "stage_one_bounds": [-0.05, 0.15],
+      "discount_rate_bounds": [0.070, 0.140],
+      "stage_two_fade_fraction": 0.35
+    },
+    "utilities": {
+      "display_name": "Utilities",
+      "business_type": "regulated or infrastructure utility",
+      "stage_one_growth": 0.040,
+      "terminal_growth": 0.020,
+      "discount_rate": 0.075,
+      "stage_one_bounds": [-0.03, 0.10],
+      "discount_rate_bounds": [0.060, 0.120],
+      "stage_two_fade_fraction": 0.30
+    },
+    "healthcare": {
+      "display_name": "Healthcare",
+      "business_type": "healthcare products and services",
+      "stage_one_growth": 0.085,
+      "terminal_growth": 0.025,
+      "discount_rate": 0.095,
+      "stage_one_bounds": [-0.08, 0.24],
+      "discount_rate_bounds": [0.075, 0.160],
+      "stage_two_fade_fraction": 0.38
+    },
+    "energy": {
+      "display_name": "Energy",
+      "business_type": "energy producer or service provider",
+      "stage_one_growth": 0.045,
+      "terminal_growth": 0.020,
+      "discount_rate": 0.105,
+      "stage_one_bounds": [-0.10, 0.16],
+      "discount_rate_bounds": [0.080, 0.170],
+      "stage_two_fade_fraction": 0.32
+    },
+    "real_estate": {
+      "display_name": "Real Estate",
+      "business_type": "real-estate owner or operator",
+      "stage_one_growth": 0.050,
+      "terminal_growth": 0.020,
+      "discount_rate": 0.090,
+      "stage_one_bounds": [-0.06, 0.15],
+      "discount_rate_bounds": [0.070, 0.145],
+      "stage_two_fade_fraction": 0.35
+    },
+    "industrials": {
+      "display_name": "Industrials",
+      "business_type": "industrial manufacturer or service provider",
+      "stage_one_growth": 0.060,
+      "terminal_growth": 0.025,
+      "discount_rate": 0.095,
+      "stage_one_bounds": [-0.08, 0.18],
+      "discount_rate_bounds": [0.075, 0.155],
+      "stage_two_fade_fraction": 0.35
+    },
+    "consumer": {
+      "display_name": "Consumer",
+      "business_type": "consumer products or services company",
+      "stage_one_growth": 0.065,
+      "terminal_growth": 0.025,
+      "discount_rate": 0.095,
+      "stage_one_bounds": [-0.08, 0.20],
+      "discount_rate_bounds": [0.075, 0.155],
+      "stage_two_fade_fraction": 0.35
+    },
+    "other": {
+      "display_name": "Diversified or Unclassified",
+      "business_type": "diversified or unclassified operating company",
+      "stage_one_growth": 0.060,
+      "terminal_growth": 0.025,
+      "discount_rate": 0.100,
+      "stage_one_bounds": [-0.08, 0.18],
+      "discount_rate_bounds": [0.080, 0.160],
+      "stage_two_fade_fraction": 0.35
+    }
+  }
+}

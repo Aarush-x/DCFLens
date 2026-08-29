@@ -1,6 +1,6 @@
 # DCFLens
 
-DCFLens is an evidence-first equity research and discounted cash flow application. The repository now contains the production-oriented monorepo scaffold and the product, architecture, trust, provenance, valuation, and deployment specifications. Valuation and filing-analysis features have not been implemented yet.
+DCFLens is an evidence-first equity research and discounted cash flow application. The repository contains a production-oriented monorepo scaffold, deterministic DCF engine, adaptive baseline policy, SEC ingestion and normalization, and the product, architecture, trust, provenance, valuation, and deployment specifications. Filing analysis, AI integration, and the product frontend workflow are not implemented yet.
 
 The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized FastAPI backend in `apps/api`, an optional `packages/shared` package for generated or cross-runtime contracts, and repository-level deployment configuration.
 
@@ -14,6 +14,7 @@ The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized F
 | [Deployment architecture](docs/deployment-architecture.md) | Vercel, Render, Docker, configuration, health checks, and rollback model |
 | [Valuation methodology](docs/valuation-methodology.md) | Deterministic DCF formulas, assumptions, scenarios, and validation rules |
 | [DCF engine contract](docs/dcf-engine.md) | Implemented formulas, units, validation, decomposition, and assumption sensitivity |
+| [Adaptive baseline](docs/adaptive-baseline.md) | Versioned sector priors, company-specific assumption formulas, fallbacks, and traces |
 | [SEC ingestion contract](docs/sec-ingestion.md) | EDGAR access, pacing, retries, caching, normalization, and fact-level provenance |
 | [AI trust boundaries](docs/ai-trust-boundaries.md) | What Gemini may do, what it may not do, and required safeguards |
 | [Evidence provenance](docs/evidence-provenance.md) | Source identity, locators, transformation records, and claim citation rules |

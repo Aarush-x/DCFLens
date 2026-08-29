@@ -2,7 +2,9 @@
 
 ## Scope and boundary
 
-`apps/api/app/valuation` calculates one deterministic two-stage discounted cash flow valuation from explicit inputs. It has no FastAPI, SEC, AI-provider, cache, environment-variable, logging, or frontend-formatting dependency. It performs no I/O and reads no global mutable state.
+`apps/api/app/valuation/engine.py` calculates one deterministic two-stage discounted cash flow valuation from explicit inputs. The calculator has no FastAPI, SEC, AI-provider, cache, environment-variable, logging, or frontend-formatting dependency. It performs no I/O and reads no global mutable state.
+
+The adjacent adaptive baseline builder consumes already-normalized SEC fact types and produces explicit `DcfAssumptions` plus complete traces. It does not alter the calculator's boundary or perform SEC requests. See [adaptive-baseline.md](adaptive-baseline.md).
 
 The engine does not create bull, base, bear, or other named scenarios. Each call returns one final valuation and an assumption-sensitivity interval around that valuation.
 
