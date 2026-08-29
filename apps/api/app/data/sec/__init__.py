@@ -8,6 +8,7 @@ from app.data.sec.errors import (
     SecRequestError,
 )
 from app.data.sec.models import (
+    CompanySubmissionProfile,
     EvidenceReference,
     FilingDocument,
     FilingMetadata,
@@ -18,6 +19,7 @@ from app.data.sec.models import (
 from app.data.sec.normalization import normalize_company_facts
 
 __all__ = [
+    "CompanySubmissionProfile",
     "EvidenceReference",
     "FilingDocument",
     "FilingMetadata",

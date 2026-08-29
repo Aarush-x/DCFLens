@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import json
 import socket
+from urllib.error import HTTPError
 
 import pytest
 
-from app.ai.gemini import GeminiClient, GeminiClientConfig, GeminiTimeoutError
+from app.ai.gemini import (
+    GeminiClient,
+    GeminiClientConfig,
+    GeminiRateLimitError,
+    GeminiTimeoutError,
+)
 from app.ai.models import ProviderRequest
 
 
@@ -75,3 +81,23 @@ def test_gemini_client_maps_socket_timeout_to_safe_error() -> None:
         client.generate(ProviderRequest("system", "prompt", {"type": "OBJECT"}))
 
     assert "secret provider details" not in str(error.value)
+
+
+def test_gemini_client_preserves_rate_limit_as_a_distinct_safe_error() -> None:
+    def opener(*args: object, **kwargs: object):
+        raise HTTPError(
+            "https://generativelanguage.googleapis.com/redacted",
+            429,
+            "quota detail that must not escape",
+            hdrs=None,
+            fp=None,
+        )
+
+    client = GeminiClient(
+        GeminiClientConfig(api_key="secret-placeholder"), opener=opener
+    )
+
+    with pytest.raises(GeminiRateLimitError, match="rate limited") as error:
+        client.generate(ProviderRequest("system", "prompt", {"type": "OBJECT"}))
+
+    assert "quota detail" not in str(error.value)

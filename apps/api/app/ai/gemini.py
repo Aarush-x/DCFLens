@@ -23,6 +23,10 @@ class GeminiTimeoutError(GeminiProviderError):
     """Gemini did not complete within the configured timeout."""
 
 
+class GeminiRateLimitError(GeminiProviderError):
+    """Gemini rejected the request because its quota or rate limit was reached."""
+
+
 @dataclass(frozen=True, slots=True)
 class GeminiClientConfig:
     api_key: str
@@ -96,6 +100,8 @@ class GeminiClient:
         except (TimeoutError, socket.timeout) as exc:
             raise GeminiTimeoutError("Gemini request timed out") from exc
         except HTTPError as exc:
+            if exc.code == 429:
+                raise GeminiRateLimitError("Gemini request was rate limited") from exc
             raise GeminiProviderError(
                 f"Gemini request failed with HTTP status {exc.code}"
             ) from exc

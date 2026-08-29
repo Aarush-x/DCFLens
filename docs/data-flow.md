@@ -7,13 +7,13 @@
 2. Web validates basic shape and calls the API
 3. API resolves ticker to issuer and CIK
 4. SEC adapter retrieves Company Facts and filing metadata
-5. Normalizer selects annual facts and records every transformation
-6. Adaptive policy derives traced company assumptions; valuation engine calculates the deterministic baseline
+5. Normalizer selects annual facts, records every transformation, and caches successful normalized company data
+6. Adaptive policy derives traced company assumptions; valuation engine calculates and caches the deterministic baseline
 7. Checklist engine evaluates numeric rules from normalized facts
 8. Filing extractor collects bounded, labeled sections and Exhibit 21
 9. Gemini returns schema-constrained qualitative findings with evidence IDs
 10. API validates findings, applies three code-bounded adjustments, and recalculates one final valuation
-11. API returns valuation, checklist, claims, evidence, warnings, and freshness
+11. API returns valuation, checklist, claims, evidence, warnings, and freshness; only completed AI-applied analyses enter the response cache
 12. Web renders results with direct source links
 ```
 
@@ -49,6 +49,8 @@ For each target metric, the normalizer:
 DCFLens must not copy DeltaDCF's final reduction to plain values because that discards accession and concept provenance.
 
 The implemented normalizer preserves comparative periods and every selected input as an `EvidenceReference`. Missing or conflicting facts remain explicit rather than becoming zero.
+
+Concurrent requests for the same normalized ticker share one in-flight analysis within a process. SEC, deterministic, and completed-analysis caches are separate so a transient Gemini failure cannot poison or hide deterministic results.
 
 ### 5. Deterministic assumptions and valuation
 

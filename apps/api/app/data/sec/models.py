@@ -33,6 +33,16 @@ class FilingMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class CompanySubmissionProfile:
+    cik: str
+    company_name: str
+    sic_code: int | None
+    sic_description: str
+    fiscal_year_end: str | None
+    filings: tuple[FilingMetadata, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class FilingDocument:
     metadata: FilingMetadata
     content: str

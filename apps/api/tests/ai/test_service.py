@@ -10,6 +10,7 @@ from app.ai import (
     AiAnalysisStatus,
     AnalysisEvidence,
     GeminiProviderError,
+    GeminiRateLimitError,
     GeminiTimeoutError,
     run_qualitative_analysis,
 )
@@ -332,6 +333,15 @@ def test_provider_timeout_returns_deterministic_fallback() -> None:
     result = run_qualitative_analysis(_analysis_input(), provider)
 
     assert result.fallback_reason == "provider_timeout"
+
+
+def test_provider_rate_limit_returns_distinct_deterministic_fallback() -> None:
+    provider = StaticProvider(error=GeminiRateLimitError("rate limited"))
+
+    result = run_qualitative_analysis(_analysis_input(), provider)
+
+    assert result.status is AiAnalysisStatus.DETERMINISTIC_FALLBACK
+    assert result.fallback_reason == "provider_rate_limit"
     assert result.final_valuation is result.baseline_valuation
     assert result.confidence.level.value == "Low"
 

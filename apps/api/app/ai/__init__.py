@@ -4,6 +4,7 @@ from app.ai.gemini import (
     GeminiClient,
     GeminiClientConfig,
     GeminiProviderError,
+    GeminiRateLimitError,
     GeminiTimeoutError,
 )
 from app.ai.models import (
@@ -25,6 +26,7 @@ __all__ = [
     "GeminiClient",
     "GeminiClientConfig",
     "GeminiProviderError",
+    "GeminiRateLimitError",
     "GeminiTimeoutError",
     "run_qualitative_analysis",
 ]

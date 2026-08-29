@@ -4,7 +4,11 @@ import math
 from dataclasses import replace
 from urllib.parse import urlparse
 
-from app.ai.gemini import GeminiProviderError, GeminiTimeoutError
+from app.ai.gemini import (
+    GeminiProviderError,
+    GeminiRateLimitError,
+    GeminiTimeoutError,
+)
 from app.ai.models import (
     AiAnalysisInput,
     AiAnalysisResult,
@@ -16,6 +20,7 @@ from app.ai.models import (
     ConfidenceAssessment,
     ConfidenceFactor,
     ConfidenceLevel,
+    DeterministicAnalysis,
     DisagreementSummary,
     EvidenceAssessment,
     EvidenceSupport,
@@ -48,18 +53,14 @@ class AiAnalysisInputError(ValueError):
 def run_qualitative_analysis(
     analysis_input: AiAnalysisInput,
     provider: QualitativeProvider,
+    *,
+    deterministic: DeterministicAnalysis | None = None,
 ) -> AiAnalysisResult:
     """Calculate deterministic results first, then optionally apply validated AI output."""
-    baseline = derive_adaptive_baseline(
-        analysis_input.company_profile,
-        analysis_input.checklist_input.normalized_facts,
-    )
-    baseline_valuation = calculate_dcf(
-        analysis_input.dcf_input,
-        baseline.assumptions,
-        analysis_input.sensitivity,
-    )
-    deterministic_checklist = evaluate_checklist(analysis_input.checklist_input)
+    prepared = deterministic or prepare_deterministic_analysis(analysis_input)
+    baseline = prepared.baseline
+    baseline_valuation = prepared.valuation
+    deterministic_checklist = prepared.checklist
     evidence_by_id = _validate_evidence(analysis_input.evidence)
 
     if not evidence_by_id:
@@ -78,6 +79,13 @@ def run_qualitative_analysis(
     )
     try:
         response_text = provider.generate(provider_request)
+    except GeminiRateLimitError:
+        return _fallback_result(
+            "provider_rate_limit",
+            baseline,
+            baseline_valuation,
+            deterministic_checklist,
+        )
     except GeminiTimeoutError:
         return _fallback_result(
             "provider_timeout",
@@ -126,6 +134,27 @@ def run_qualitative_analysis(
             baseline_valuation,
             deterministic_checklist,
         )
+
+
+def prepare_deterministic_analysis(
+    analysis_input: AiAnalysisInput,
+) -> DeterministicAnalysis:
+    """Build the provider-independent portion so service caches can reuse it."""
+    baseline = derive_adaptive_baseline(
+        analysis_input.company_profile,
+        analysis_input.checklist_input.normalized_facts,
+    )
+    valuation = calculate_dcf(
+        analysis_input.dcf_input,
+        baseline.assumptions,
+        analysis_input.sensitivity,
+    )
+    checklist = evaluate_checklist(analysis_input.checklist_input)
+    return DeterministicAnalysis(
+        baseline=baseline,
+        valuation=valuation,
+        checklist=checklist,
+    )
 
 
 def _validate_evidence(

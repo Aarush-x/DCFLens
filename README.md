@@ -19,6 +19,7 @@ The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized F
 | [SEC ingestion contract](docs/sec-ingestion.md) | EDGAR access, pacing, retries, caching, normalization, and fact-level provenance |
 | [AI trust boundaries](docs/ai-trust-boundaries.md) | What Gemini may do, what it may not do, and required safeguards |
 | [Gemini trust model](docs/trust-model.md) | Implemented structured-output, evidence, adjustment, fallback, and confidence contract |
+| [FastAPI service layer](docs/api-service.md) | Analyze endpoint, errors, CORS, caching, concurrency, logging, and runtime behavior |
 | [Evidence provenance](docs/evidence-provenance.md) | Source identity, locators, transformation records, and claim citation rules |
 | [DeltaDCF 10-point checklist](docs/deltadcf-checklist.md) | The reference checklist preserved unchanged |
 | [DeltaDCF comparison](docs/deltadcf-comparison.md) | Reusable patterns, coupled details, and DCFLens redesigns |
@@ -84,6 +85,7 @@ Next.js uses `http://localhost:8000` only as the development fallback. Vercel pr
 - Centralized frontend API URL validation
 - Production-oriented Docker and Render configuration
 - Gemini structured-output client and domain orchestration with strict Python validation and deterministic fallback
-- No valuation/SEC/AI API route, filing-section extraction, or frontend integration
+- FastAPI `GET /api/analyze/{ticker}` orchestration with sanitized errors, structured logs, bounded caches, and duplicate suppression
+- Filing-section text extraction and frontend integration remain unimplemented
 - No deployment performed
 - No remote repository changes made

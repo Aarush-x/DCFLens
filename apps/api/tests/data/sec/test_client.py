@@ -285,6 +285,21 @@ def test_latest_10k_prefers_amendment_for_latest_report_period() -> None:
     )
 
 
+def test_submission_profile_preserves_sector_metadata() -> None:
+    transport = QueueTransport()
+    clock = FakeClock()
+    submissions_url = f"{DATA_BASE_URL}/submissions/CIK0000320193.json"
+    transport.queue(submissions_url, json_response(submissions_payload()))
+    client = client_with(transport, clock)
+
+    profile = client.get_submission_profile(320193)
+
+    assert profile.company_name == "Apple Inc."
+    assert profile.sic_code == 3571
+    assert profile.sic_description == "Electronic Computers"
+    assert profile.filings[0].filing_form == "10-K/A"
+
+
 def test_latest_10k_retrieves_accession_specific_document() -> None:
     transport = QueueTransport()
     clock = FakeClock()

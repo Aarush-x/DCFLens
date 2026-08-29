@@ -80,6 +80,8 @@ The first implementation should use a versioned boundary such as `POST /v1/analy
 
 `GET /health` is a liveness check. If a separate readiness check is introduced, it may validate local configuration but must not call external providers.
 
+The implemented service route is `GET /api/analyze/{ticker}`. Application orchestration lives under `apps/api/app/services`; it composes the SEC, valuation, checklist, and AI domains without moving caching, HTTP semantics, or global application state into those domains. See [FastAPI service layer](api-service.md) for its error, CORS, cache, concurrency, and runtime contracts.
+
 ## Reusable DeltaDCF patterns
 
 - FastAPI plus Uvicorn behind a non-root Docker image.

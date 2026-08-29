@@ -17,6 +17,7 @@ from app.data.sec.errors import (
     SecRequestError,
 )
 from app.data.sec.models import (
+    CompanySubmissionProfile,
     FilingDocument,
     FilingMetadata,
     SecJsonDocument,
@@ -174,6 +175,10 @@ class SecClient:
         return resolution, self.get_company_facts(resolution.cik)
 
     def get_10k_filings(self, cik: str | int) -> tuple[FilingMetadata, ...]:
+        return self.get_submission_profile(cik).filings
+
+    def get_submission_profile(self, cik: str | int) -> CompanySubmissionProfile:
+        """Return SEC company classification and recent 10-K metadata."""
         normalized_cik = self._normalize_cik(cik)
         url = f"{DATA_BASE_URL}/submissions/CIK{normalized_cik}.json"
         document = self._get_json(url)
@@ -234,7 +239,7 @@ class SecClient:
             )
             seen_accessions.add(accession)
 
-        return tuple(
+        sorted_filings = tuple(
             sorted(
                 results,
                 key=lambda filing: (
@@ -244,6 +249,29 @@ class SecClient:
                 ),
                 reverse=True,
             )
+        )
+        company_name = document.payload.get("name")
+        if not isinstance(company_name, str) or not company_name.strip():
+            raise SecDataError("SEC submissions response is missing company name")
+        sic_value = document.payload.get("sic")
+        sic_code: int | None = None
+        if sic_value not in (None, ""):
+            try:
+                sic_code = int(str(sic_value))
+            except ValueError as exc:
+                raise SecDataError("SEC submissions SIC must be numeric") from exc
+            if not 100 <= sic_code <= 9999:
+                raise SecDataError("SEC submissions SIC must contain 3 or 4 digits")
+        sic_description = document.payload.get("sicDescription", "")
+        if not isinstance(sic_description, str):
+            raise SecDataError("SEC submissions sicDescription must be a string")
+        return CompanySubmissionProfile(
+            cik=normalized_cik,
+            company_name=company_name.strip(),
+            sic_code=sic_code,
+            sic_description=sic_description.strip(),
+            fiscal_year_end=fiscal_year_end or None,
+            filings=sorted_filings,
         )
 
     def get_latest_10k_for_cik(self, cik: str | int) -> FilingDocument:

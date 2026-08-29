@@ -27,11 +27,11 @@ The repository-root Blueprint retains the useful DeltaDCF shape:
 - `healthCheckPath: /health`
 - `autoDeployTrigger: checksPass`
 
-The container uses a supported Python 3.12 slim Bookworm base, installs only runtime dependencies, copies only the API application, runs as a non-root user, uses `exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`, and provides a Docker health check with the Python standard library rather than installing `curl` only for health checks.
+The container uses a supported Python 3.12 slim Bookworm base, installs only runtime dependencies, copies only the API application, and runs as a non-root user. Its `python -m app` entry point imports `app.main:app`, binds `0.0.0.0`, respects Render's `PORT`, and defaults to port `8000`. The Docker health check uses the Python standard library rather than installing `curl` only for health checks.
 
 ### Backend environment contract
 
-The scaffold implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_TIMEOUT_SECONDS`, `CORS_ALLOWED_ORIGINS`, and `CACHE_TTL_SECONDS`. The remaining rows describe variables to add only with their corresponding features.
+The service implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `SEC_TIMEOUT_SECONDS`, `SEC_MAX_RETRIES`, `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_TIMEOUT_SECONDS`, `CORS_ALLOWED_ORIGINS`, optional project-scoped Vercel preview slugs, `CACHE_TTL_SECONDS`, and `CACHE_MAX_ENTRIES`.
 
 | Variable | Exposure | Production rule |
 | --- | --- | --- |
@@ -44,6 +44,9 @@ The scaffold implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `GOOGLE_
 | `GEMINI_TIMEOUT_SECONDS` | Server | Explicit bounded provider timeout; defaults to 30 seconds and may not exceed 120. |
 | `GOOGLE_API_KEY` | Secret | Required only when Gemini is enabled. Never logged or returned. |
 | `CORS_ALLOWED_ORIGINS` | Server | Required exact comma-separated origins. Wildcard rejected. |
+| `CORS_VERCEL_PREVIEW_PROJECT` / `CORS_VERCEL_PREVIEW_TEAM` | Server | Optional paired slugs used to derive one anchored project/team preview-origin regex. |
+| `CACHE_TTL_SECONDS` / `CACHE_MAX_ENTRIES` | Server | Bound each process-local cache. |
+| `SEC_TIMEOUT_SECONDS` / `SEC_MAX_RETRIES` | Server | Bound SEC latency and retry attempts. |
 | `EXTERNAL_REQUEST_TIMEOUT_SECONDS` | Server | Positive bounded integer. |
 | `MAX_REPORT_BYTES` | Server | Positive bounded integer. |
 | `EVIDENCE_RETENTION_DAYS` | Server | Required if durable evidence storage is selected. |
@@ -61,6 +64,8 @@ Preview deployments require a CORS decision. The safest default is to permit onl
 ## Health and readiness
 
 `GET /health` returns a small stable body such as `{"status":"ok"}` and must not call SEC, Gemini, a database, or object storage. It proves that the process can serve HTTP.
+
+The prototype uses bounded in-memory caches and per-process duplicate suppression. Render restarts clear them, multiple instances do not share them, and the local filesystem remains unused because it is ephemeral. A future Redis adapter can implement the cache protocol without entering the valuation domain.
 
 A future `GET /ready` may verify local configuration and required internal connections. External provider outages should appear in analysis errors and observability, not make every instance fail liveness.
 

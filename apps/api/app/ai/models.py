@@ -63,6 +63,13 @@ class AiAnalysisInput:
 
 
 @dataclass(frozen=True, slots=True)
+class DeterministicAnalysis:
+    baseline: AdaptiveBaseline
+    valuation: DcfResult
+    checklist: ChecklistEvaluation
+
+
+@dataclass(frozen=True, slots=True)
 class ProviderRequest:
     system_instruction: str
     prompt: str

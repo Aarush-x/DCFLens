@@ -14,6 +14,8 @@ def submissions_payload() -> dict[str, Any]:
     return {
         "cik": "0000320193",
         "name": "Apple Inc.",
+        "sic": "3571",
+        "sicDescription": "Electronic Computers",
         "fiscalYearEnd": "0928",
         "filings": {
             "recent": {
