@@ -6,7 +6,6 @@ services:
     dockerContext: .
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /health
-    maxShutdownDelaySeconds: 30
     autoDeployTrigger: checksPass
     envVars:
       - key: APP_ENV
