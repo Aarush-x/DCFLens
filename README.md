@@ -15,6 +15,7 @@ The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized F
 | [Valuation methodology](docs/valuation-methodology.md) | Deterministic DCF formulas, assumptions, scenarios, and validation rules |
 | [DCF engine contract](docs/dcf-engine.md) | Implemented formulas, units, validation, decomposition, and assumption sensitivity |
 | [Adaptive baseline](docs/adaptive-baseline.md) | Versioned sector priors, company-specific assumption formulas, fallbacks, and traces |
+| [Checklist engine](docs/checklist-engine.md) | Immutable ten-item contract, deterministic rules, sector context, and evidence behavior |
 | [SEC ingestion contract](docs/sec-ingestion.md) | EDGAR access, pacing, retries, caching, normalization, and fact-level provenance |
 | [AI trust boundaries](docs/ai-trust-boundaries.md) | What Gemini may do, what it may not do, and required safeguards |
 | [Evidence provenance](docs/evidence-provenance.md) | Source identity, locators, transformation records, and claim citation rules |

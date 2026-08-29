@@ -25,11 +25,13 @@ The checklist text is unchanged, but evaluation becomes more explicit:
 | 2 | Revenue and gross profit facts across periods | Deterministic comparative trend |
 | 3 | Net income, diluted EPS, and diluted shares | Deterministic trend plus dilution warning |
 | 4 | Debt, assets, cash, and coverage facts where available | Deterministic metrics with disclosed thresholds |
-| 5 | Inventory, net income, and revenue across periods | Deterministic trend; `UNKNOWN` when not applicable or missing |
+| 5 | Inventory, net income, and revenue across periods | Deterministic trend; `NOT_APPLICABLE` only when sector economics make inventory immaterial, otherwise `UNKNOWN` when missing |
 | 6 | Revenue, receivables, and operating cash flow | Deterministic trend plus filing context |
 | 7 | Operating cash flow across periods | Deterministic status |
 | 8 | Net income and average equity | Deterministic ratio with period alignment |
 | 9 | 10-K Item 1 and segment disclosures | Evidence-backed qualitative assessment |
 | 10 | Exhibit 21 and related-party disclosures | Evidence-backed qualitative assessment |
 
-`PASS`, `FAIL`, and `MONITOR` require evidence. `UNKNOWN` is required when the available evidence cannot support a conclusion. The preserved checklist must not be quietly rewritten to fit available data.
+The only statuses are `SUPPORTS`, `WEAKENS`, `MONITOR`, `UNKNOWN`, and `NOT_APPLICABLE`. A supported conclusion requires evidence. `UNKNOWN` is required when an applicable item lacks sufficient evidence. `NOT_APPLICABLE` is limited to a disclosed sector or business-model reason. The preserved checklist must not be quietly rewritten to fit available data.
+
+The implemented formulas, thresholds, evidence contract, and sector caveats are documented in [checklist-engine.md](checklist-engine.md).

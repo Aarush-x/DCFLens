@@ -43,7 +43,8 @@ DCFLens/
 │       │   ├── data/               # SEC clients and normalization
 │       │   ├── evidence/           # Provenance records and claim linking
 │       │   ├── ai/                 # Gemini prompt, schema, and validation
-│       │   └── valuation/          # DCF and checklist engines
+│       │   ├── valuation/          # DCF engine and adaptive assumptions
+│       │   └── checklist/          # Immutable checklist contract and deterministic rules
 │       ├── tests/
 │       ├── .env.example
 │       ├── Dockerfile
@@ -69,7 +70,7 @@ DCFLens/
 | SEC adapter | HTTP identity, pacing, bounded retries/cache, raw SEC payloads, and annual fact provenance | Valuation decisions |
 | Normalizer | Concept aliases, units, periods, restatement selection | Model-generated interpretation |
 | Valuation engine | Pure numeric calculation and guards | Network access or AI calls |
-| Checklist engine | Rule evaluation and evidence requirements | Unvalidated model output |
+| Checklist engine | Immutable ten-item contract, rule evaluation, sector applicability, and evidence requirements | Aggregate BUY/SELL scores or unvalidated model output |
 | Gemini adapter | Prompt construction, structured output, retries, timeouts | Final authority over facts or baseline valuation |
 | Evidence layer | Stable references, hashes, transformations, claim links | Rendering decisions |
 

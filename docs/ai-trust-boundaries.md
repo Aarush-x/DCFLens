@@ -11,7 +11,7 @@ Gemini may:
 - Classify filing excerpts against checklist items.
 - Summarize business lines, risks, related-party disclosures, executive compensation, and subsidiaries.
 - Identify passages that deserve review.
-- Produce a schema-constrained `PASS`, `FAIL`, `MONITOR`, or `UNKNOWN` recommendation with evidence IDs.
+- Produce a schema-constrained `SUPPORTS`, `WEAKENS`, `MONITOR`, `UNKNOWN`, or `NOT_APPLICABLE` recommendation with evidence IDs for later validation; deterministic structured-fact results remain authoritative.
 - Propose a bounded alternative scenario when each adjustment includes rationale and evidence references.
 
 ## Prohibited uses
