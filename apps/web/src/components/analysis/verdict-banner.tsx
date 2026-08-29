@@ -1,3 +1,5 @@
+import { FigureTransition } from "@/components/motion/figure-transition";
+import { Reveal } from "@/components/motion/reveal";
 import type { AnalysisEnvelope } from "@/lib/analysis-types";
 import type { AnalysisView } from "@/lib/analysis-view";
 import { formatDateTime, formatUsd } from "@/lib/format";
@@ -8,6 +10,10 @@ import { formatDateTime, formatUsd } from "@/lib/format";
  *
  * The tone class comes from `AnalysisView.tone`, which is derived from evidence
  * strength, disagreement, and fragility — never from the sign of the estimate.
+ *
+ * It reveals top-down on load — who this is about, then the answer, then the
+ * figures behind it — which is the hierarchy the banner is already laid out in.
+ * The reveal restates that order; it does not create it.
  */
 export function VerdictBanner({
   envelope,
@@ -22,46 +28,50 @@ export function VerdictBanner({
 
   return (
     <section className={`verdict verdict--${view.tone}`} aria-labelledby="verdict-title">
-      <p className="eyebrow">
-        {envelope.companyName} · <span className="financial-value">{envelope.ticker}</span>
-      </p>
-      <h1 id="verdict-title">{view.verdict}</h1>
-      <p className="verdict__detail">{view.verdictDetail}</p>
+      <Reveal immediate selector=".eyebrow, h1, .verdict__detail, .verdict__figures">
+        <p className="eyebrow" data-assembly-step="ticker">
+          {envelope.companyName} · <span className="financial-value">{envelope.ticker}</span>
+        </p>
+        <h1 id="verdict-title">{view.verdict}</h1>
+        <p className="verdict__detail">{view.verdictDetail}</p>
 
-      <dl className="verdict__figures">
-        <div>
-          <dt>Today&rsquo;s price</dt>
-          <dd className="financial-value">
-            {price.isAvailable && price.price !== null
-              ? formatUsd(price.price, price.currency)
-              : "Not available"}
-          </dd>
-          <p className="verdict__figure-note">
-            {price.isAvailable && price.asOf !== null
-              ? `${price.source} · ${formatDateTime(price.asOf)}`
-              : "No market quote was retrieved for this company."}
-          </p>
-        </div>
-        <div>
-          <dt>What the filings suggest one share is worth</dt>
-          <dd className="financial-value verdict__estimate">
-            {formatUsd(valuation.intrinsicValuePerShare, valuation.currency)}
-          </dd>
-          <p className="verdict__figure-note">
-            One estimate, from the assumptions listed under &ldquo;Know why&rdquo;.
-          </p>
-        </div>
-        <div>
-          <dt>If those assumptions shift a little</dt>
-          <dd className="financial-value">
-            {formatUsd(interval.lowerBoundPerShare, valuation.currency)} &ndash;{" "}
-            {formatUsd(interval.upperBoundPerShare, valuation.currency)}
-          </dd>
-          <p className="verdict__figure-note">
-            A spread of assumptions, not a forecast and not a probability.
-          </p>
-        </div>
-      </dl>
+        <FigureTransition settleOnReveal={false}>
+          <dl className="verdict__figures">
+            <div>
+              <dt>Today&rsquo;s price</dt>
+              <dd className="financial-value">
+                {price.isAvailable && price.price !== null
+                  ? formatUsd(price.price, price.currency)
+                  : "Not available"}
+              </dd>
+              <p className="verdict__figure-note">
+                {price.isAvailable && price.asOf !== null
+                  ? `${price.source} · ${formatDateTime(price.asOf)}`
+                  : "No market quote was retrieved for this company."}
+              </p>
+            </div>
+            <div>
+              <dt>What the filings suggest one share is worth</dt>
+              <dd className="financial-value verdict__estimate">
+                {formatUsd(valuation.intrinsicValuePerShare, valuation.currency)}
+              </dd>
+              <p className="verdict__figure-note">
+                One estimate, from the assumptions listed under &ldquo;Know why&rdquo;.
+              </p>
+            </div>
+            <div>
+              <dt>If those assumptions shift a little</dt>
+              <dd className="financial-value">
+                {formatUsd(interval.lowerBoundPerShare, valuation.currency)} &ndash;{" "}
+                {formatUsd(interval.upperBoundPerShare, valuation.currency)}
+              </dd>
+              <p className="verdict__figure-note">
+                A spread of assumptions, not a forecast and not a probability.
+              </p>
+            </div>
+          </dl>
+        </FigureTransition>
+      </Reveal>
 
       <RangeBar
         view={view}

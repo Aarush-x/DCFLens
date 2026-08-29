@@ -1,6 +1,8 @@
 import type { AnalysisEnvelope, NarrativeClaim } from "@/lib/analysis-types";
 import type { AnalysisView } from "@/lib/analysis-view";
 import { EvidenceCitation } from "@/components/analysis/evidence-citation";
+import { EvidenceTrace } from "@/components/motion/evidence-trace";
+import { Reveal } from "@/components/motion/reveal";
 import { StatusLabel } from "@/components/status-label";
 
 /**
@@ -70,40 +72,42 @@ export function PlainAssessment({
   return (
     <section className="assessment" aria-labelledby="assessment-title">
       <h2 id="assessment-title">How much weight this deserves</h2>
-      <div className="assessment__grid">
-        <article>
-          <h3>How good is the evidence?</h3>
-          <p className="assessment__value">{view.evidence.label}</p>
-          <p>{view.evidence.statement}</p>
-          <p className="assessment__note">
-            {view.evidence.citedEvidenceCount} filing reference
-            {view.evidence.citedEvidenceCount === 1 ? "" : "s"} sit behind those claims. Every one
-            of them is linked further down.
-          </p>
-        </article>
+      <Reveal selector=".assessment__grid > article">
+        <div className="assessment__grid">
+          <article>
+            <h3>How good is the evidence?</h3>
+            <p className="assessment__value">{view.evidence.label}</p>
+            <p>{view.evidence.statement}</p>
+            <p className="assessment__note">
+              {view.evidence.citedEvidenceCount} filing reference
+              {view.evidence.citedEvidenceCount === 1 ? "" : "s"} sit behind those claims. Every one
+              of them is linked further down.
+            </p>
+          </article>
 
-        <article>
-          <h3>How confident are we?</h3>
-          <p className="assessment__value">{confidence.level}</p>
-          <p>{view.aiCoverage.statement}</p>
-          <p className="assessment__note">
-            This is not the chance of the price reaching the estimate. It is a summary of how
-            complete the data was, how steady the numbers are, and how much the two readings agree.
-          </p>
-        </article>
+          <article>
+            <h3>How confident are we?</h3>
+            <p className="assessment__value">{confidence.level}</p>
+            <p>{view.aiCoverage.statement}</p>
+            <p className="assessment__note">
+              This is not the chance of the price reaching the estimate. It is a summary of how
+              complete the data was, how steady the numbers are, and how much the two readings agree.
+            </p>
+          </article>
 
-        <article>
-          <h3>The ten-point checklist</h3>
-          <p className="assessment__value financial-value">
-            {counts.SUPPORTS}/{view.checklistSummary.total}
-          </p>
-          <p>{view.checklistSummary.statement}</p>
-          <p className="assessment__note">
-            The full list, in its original wording and order, is under{" "}
-            <a href="#know-why-checklist">the checklist section</a>.
-          </p>
-        </article>
-      </div>
+          <article>
+            <h3>The ten-point checklist</h3>
+            <p className="assessment__value financial-value">
+              {counts.SUPPORTS}/{view.checklistSummary.total}
+            </p>
+            <p>{view.checklistSummary.statement}</p>
+            <p className="assessment__note">
+              The full list, in its original wording and order, is under{" "}
+              <a href="#know-why-checklist">the checklist section</a>.
+            </p>
+          </article>
+        </div>
+      </Reveal>
 
       {view.fragility.isFragile ? (
         <div className="fragility">
@@ -159,30 +163,34 @@ export function PlainNarrativeSection({
   return (
     <section className="narrative" aria-labelledby="narrative-title">
       <h2 id="narrative-title">The reasoning, in plain words</h2>
-      <div className="narrative__grid">
-        {blocks.map((block) => (
-          <article key={block.id} className={`narrative__block narrative__block--${block.id}`}>
-            <h3>{block.title}</h3>
-            <p className="narrative__hint">{block.hint}</p>
-            {block.claims.length === 0 ? (
-              <p className="narrative__empty">Nothing was recorded here for this company.</p>
-            ) : (
-              <ol className="narrative__claims">
-                {block.claims.map((claim) => (
-                  <li key={claim.statement}>
-                    <p>{claim.statement}</p>
-                    <EvidenceCitation
-                      evidenceIds={claim.evidenceIds}
-                      evidenceById={view.evidenceById}
-                      unsupportedLabel="No filing backs this directly — it is a judgement, not a reported fact."
-                    />
-                  </li>
-                ))}
-              </ol>
-            )}
-          </article>
-        ))}
-      </div>
+      <EvidenceTrace>
+        <Reveal selector=".narrative__block">
+          <div className="narrative__grid">
+            {blocks.map((block) => (
+              <article key={block.id} className={`narrative__block narrative__block--${block.id}`}>
+                <h3>{block.title}</h3>
+                <p className="narrative__hint">{block.hint}</p>
+                {block.claims.length === 0 ? (
+                  <p className="narrative__empty">Nothing was recorded here for this company.</p>
+                ) : (
+                  <ol className="narrative__claims">
+                    {block.claims.map((claim) => (
+                      <li key={claim.statement}>
+                        <p>{claim.statement}</p>
+                        <EvidenceCitation
+                          evidenceIds={claim.evidenceIds}
+                          evidenceById={view.evidenceById}
+                          unsupportedLabel="No filing backs this directly — it is a judgement, not a reported fact."
+                        />
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </article>
+            ))}
+          </div>
+        </Reveal>
+      </EvidenceTrace>
     </section>
   );
 }

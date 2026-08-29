@@ -17,7 +17,7 @@ The deliberate visual risk is Clash Display at headline scale. It gives the prod
 3. Tables and ledgers replace generic dashboard cards.
 4. Color is rare. Cobalt marks interactive intent; semantic status colors communicate evaluation only.
 5. Spacing establishes trust. Dense financial rows sit inside generous editorial sections.
-6. Motion is optional and functional. The initial system uses no choreography or GSAP.
+6. Motion is optional and functional. It shows that one thing follows from another and never carries information of its own, so a reader who never sees it loses nothing. See "Motion" in `DESIGN.md` for the rules; the short version is one-shot reveals, no scroll hijacking, no continuous animation, figures that settle rather than count up, and nothing at all under `prefers-reduced-motion`.
 7. Fixture data must be labeled so an illustrative valuation cannot be mistaken for live research.
 
 ## Typography

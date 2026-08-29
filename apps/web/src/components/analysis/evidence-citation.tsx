@@ -24,6 +24,10 @@ export function EvidenceCitation({
 
   return (
     <ul className="citation">
+      {/* The rule that ties the statement above to the filings below it.
+          Decorative: the same relationship is already carried by this list
+          sitting inside the claim it supports. */}
+      <span className="citation__trace" aria-hidden="true" />
       {references.map((reference) => (
         <li key={reference.evidenceId}>
           <a href={reference.sourceUrl} rel="noreferrer" target="_blank">

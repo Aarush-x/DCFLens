@@ -7,6 +7,7 @@ import {
   PlainNarrativeSection,
 } from "@/components/analysis/plain-english";
 import { VerdictBanner } from "@/components/analysis/verdict-banner";
+import { AssemblySequence } from "@/components/motion/assembly-sequence";
 import { SiteHeader } from "@/components/site-header";
 import { fixtureTickers, getAnalysisFixture } from "@/fixtures/analysis";
 import { buildAnalysisView } from "@/lib/analysis-view";
@@ -51,11 +52,16 @@ export default async function AnalysisPage({ params }: { params: Promise<{ ticke
         </p>
 
         <div className="analysis__inner">
-          <VerdictBanner envelope={envelope} view={view} />
-          <DisagreementCallout view={view} />
-          <PlainAssessment envelope={envelope} view={view} />
-          <PlainNarrativeSection envelope={envelope} view={view} />
-          <KnowWhy envelope={envelope} view={view} />
+          {/* The five stages the page is assembled from — ticker, filed facts,
+              checklist, model adjustment, valuation — reveal as the reader
+              reaches each one. */}
+          <AssemblySequence>
+            <VerdictBanner envelope={envelope} view={view} />
+            <DisagreementCallout view={view} />
+            <PlainAssessment envelope={envelope} view={view} />
+            <PlainNarrativeSection envelope={envelope} view={view} />
+            <KnowWhy envelope={envelope} view={view} />
+          </AssemblySequence>
         </div>
       </main>
 

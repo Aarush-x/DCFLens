@@ -50,6 +50,13 @@ p, h1, h2, h3, dl, dd, ol, ul { margin: 0; }
   outline-offset: 3px;
 }
 
+/* Motion ------------------------------------------------------------------- */
+
+/* The wrapper every motion component renders. `display: contents` keeps it out
+   of layout entirely, so a scope can be dropped around existing markup without
+   changing a single grid track or flow gap. */
+.motion-scope { display: contents; }
+
 .skip-link {
   position: fixed;
   z-index: 100;
@@ -310,6 +317,9 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  /* GSAP is told the same thing in JavaScript and builds no tween at all under
+     this preference; this covers anything CSS-driven that is left. */
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -334,7 +344,11 @@ h1 {
   width: min(100% - 3rem, 72rem);
   margin-inline: auto;
 }
-.analysis__inner > section + section {
+/* A motion scope is `display: contents`, so it changes nothing about layout —
+   but it is still a real element in the DOM, and a child combinator has to be
+   told it may be sitting in the way. */
+.analysis__inner > section + section,
+.analysis__inner > .motion-scope > section + section {
   margin-top: clamp(3rem, 6vw, 5rem);
   border-top: 1px solid var(--line);
   padding-top: clamp(2rem, 4vw, 3.5rem);
@@ -571,7 +585,20 @@ h1 {
   line-height: 1.55;
 }
 
-.citation { margin-top: var(--space-2); padding: 0; list-style: none; }
+.citation { position: relative; margin-top: var(--space-2); padding: 0; list-style: none; }
+/* The rule joining a claim to the filings it rests on. Decorative only: the
+   citation list already sits inside the claim it supports. Its resting state is
+   the full-height rule, so it is correct with scripting off and after any
+   animation has been reverted. */
+.citation__trace {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--space-3) * -1);
+  width: 1px;
+  background: var(--line-strong);
+  transform-origin: top center;
+}
 .citation li { margin-top: var(--space-1); }
 .citation a { color: var(--accent); font-size: 0.75rem; text-underline-offset: 0.25em; }
 .citation__id {
