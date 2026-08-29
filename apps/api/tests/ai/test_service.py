@@ -355,6 +355,19 @@ def test_provider_failure_returns_deterministic_fallback() -> None:
     assert result.checklist_qualitative_findings == ()
 
 
+def test_provider_failure_preserves_safe_diagnostic_reason() -> None:
+    provider = StaticProvider(
+        error=GeminiProviderError(
+            "Gemini credentials were rejected",
+            fallback_reason="provider_authentication",
+        )
+    )
+
+    result = run_qualitative_analysis(_analysis_input(), provider)
+
+    assert result.fallback_reason == "provider_authentication"
+
+
 def test_no_evidence_skips_provider_and_preserves_baseline() -> None:
     provider = StaticProvider(json.dumps(_valid_payload()))
     result = run_qualitative_analysis(
