@@ -61,6 +61,8 @@ class Settings:
     log_level: str
     cache_ttl_seconds: int
     google_api_key: str | None
+    gemini_model: str
+    gemini_timeout_seconds: int
     sec_identity: str
     cors_allowed_origins: tuple[str, ...]
 
@@ -112,6 +114,10 @@ class Settings:
                 "CACHE_TTL_SECONDS", 900, environment
             ),
             google_api_key=_clean(environment.get("GOOGLE_API_KEY")) or None,
+            gemini_model=_clean(environment.get("GEMINI_MODEL") or "gemini-2.5-flash"),
+            gemini_timeout_seconds=_positive_int(
+                "GEMINI_TIMEOUT_SECONDS", 30, environment
+            ),
             sec_identity=sec_identity,
             cors_allowed_origins=origins,
         )

@@ -71,7 +71,7 @@ DCFLens/
 | Normalizer | Concept aliases, units, periods, restatement selection | Model-generated interpretation |
 | Valuation engine | Pure numeric calculation and guards | Network access or AI calls |
 | Checklist engine | Immutable ten-item contract, rule evaluation, sector applicability, and evidence requirements | Aggregate BUY/SELL scores or unvalidated model output |
-| Gemini adapter | Prompt construction, structured output, retries, timeouts | Final authority over facts or baseline valuation |
+| Gemini adapter | Prompt construction, structured output, evidence-ID validation, and bounded adjustments | Authority over facts, protected DCF inputs, formulas, or checklist text |
 | Evidence layer | Stable references, hashes, transformations, claim links | Rendering decisions |
 
 ## API shape
@@ -95,7 +95,7 @@ The first implementation should use a versioned boundary such as `POST /v1/analy
 - Preserve provenance through normalization instead of reducing facts to bare floats.
 - Replace the Vite frontend and SPA assumptions with Next.js App Router conventions.
 - Split the large orchestration module into routes and domain services.
-- Keep the baseline valuation independent from AI. Treat AI adjustments as an optional scenario, not the default answer.
+- Keep the baseline valuation independent from AI. Apply only three Python-bounded adjustments, then use the unchanged engine to produce one final valuation with an assumption-sensitivity interval.
 - Replace process-local result identity with durable analysis records if shareable evidence URLs are a product requirement.
 - Make the Gemini model name configuration-driven instead of embedding a single model identifier in code.
 

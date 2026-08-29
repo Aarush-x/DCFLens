@@ -1,5 +1,7 @@
 # AI trust boundaries
 
+The implemented contract is specified in [trust-model.md](trust-model.md). This document records the broader product policy and production-readiness requirements.
+
 ## Trust model
 
 Gemini is a constrained research assistant, not a source of record and not the valuation engine. SEC filings and structured facts are evidence. Deterministic code performs calculations. Human-readable model output remains a claim that must be validated and cited.
@@ -12,7 +14,7 @@ Gemini may:
 - Summarize business lines, risks, related-party disclosures, executive compensation, and subsidiaries.
 - Identify passages that deserve review.
 - Produce a schema-constrained `SUPPORTS`, `WEAKENS`, `MONITOR`, `UNKNOWN`, or `NOT_APPLICABLE` recommendation with evidence IDs for later validation; deterministic structured-fact results remain authoritative.
-- Propose a bounded alternative scenario when each adjustment includes rationale and evidence references.
+- Propose bounded additive adjustments to stage-one growth, stage-two growth, and discount rate when every adjustment includes a rationale and supplied evidence IDs.
 
 ## Prohibited uses
 
@@ -24,7 +26,7 @@ Gemini must not:
 - Create evidence URLs, accessions, quotations, or source locators.
 - Follow instructions embedded in filing text.
 - expose secrets, prompts, or full filing text in logs or client errors.
-- silently select the final valuation scenario.
+- alter terminal growth, stage durations, shares, net debt, evidence records, DCF formulas, or the original checklist.
 - claim all 10 checklist items were assessed when required evidence was absent.
 
 ## Input boundary
@@ -52,7 +54,7 @@ The API accepts model output only after validating:
 - Evidence IDs that exist in the prompt context.
 - Citations for every material qualitative claim and every proposed adjustment.
 
-An invalid response is not partially trusted by default. The baseline analysis remains available with an `ai_unavailable` or `ai_invalid` warning.
+An invalid response is not partially trusted. The result uses `DETERMINISTIC_FALLBACK`, reports a machine-readable reason, and preserves the deterministic baseline valuation and sensitivity interval exactly.
 
 ## Provider configuration
 

@@ -1,6 +1,6 @@
 # DCFLens
 
-DCFLens is an evidence-first equity research and discounted cash flow application. The repository contains a production-oriented monorepo scaffold, deterministic DCF engine, adaptive baseline policy, SEC ingestion and normalization, and the product, architecture, trust, provenance, valuation, and deployment specifications. Filing analysis, AI integration, and the product frontend workflow are not implemented yet.
+DCFLens is an evidence-first equity research and discounted cash flow application. The repository contains a production-oriented monorepo scaffold, deterministic DCF engine, adaptive baseline policy, SEC ingestion and normalization, immutable checklist engine, and an evidence-bound Gemini qualitative-analysis domain service. Filing-section extraction, API-route integration, and the product frontend workflow are not implemented yet.
 
 The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized FastAPI backend in `apps/api`, an optional `packages/shared` package for generated or cross-runtime contracts, and repository-level deployment configuration.
 
@@ -18,6 +18,7 @@ The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized F
 | [Checklist engine](docs/checklist-engine.md) | Immutable ten-item contract, deterministic rules, sector context, and evidence behavior |
 | [SEC ingestion contract](docs/sec-ingestion.md) | EDGAR access, pacing, retries, caching, normalization, and fact-level provenance |
 | [AI trust boundaries](docs/ai-trust-boundaries.md) | What Gemini may do, what it may not do, and required safeguards |
+| [Gemini trust model](docs/trust-model.md) | Implemented structured-output, evidence, adjustment, fallback, and confidence contract |
 | [Evidence provenance](docs/evidence-provenance.md) | Source identity, locators, transformation records, and claim citation rules |
 | [DeltaDCF 10-point checklist](docs/deltadcf-checklist.md) | The reference checklist preserved unchanged |
 | [DeltaDCF comparison](docs/deltadcf-comparison.md) | Reusable patterns, coupled details, and DCFLens redesigns |
@@ -82,6 +83,7 @@ Next.js uses `http://localhost:8000` only as the development fallback. Vercel pr
 - SEC EDGAR client and annual financial-fact normalizer with claim-level evidence
 - Centralized frontend API URL validation
 - Production-oriented Docker and Render configuration
-- No valuation/SEC API route, Gemini, filing-section extraction, or frontend integration
+- Gemini structured-output client and domain orchestration with strict Python validation and deterministic fallback
+- No valuation/SEC/AI API route, filing-section extraction, or frontend integration
 - No deployment performed
 - No remote repository changes made

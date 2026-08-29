@@ -31,7 +31,7 @@ The container uses a supported Python 3.12 slim Bookworm base, installs only run
 
 ### Backend environment contract
 
-The scaffold implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `GOOGLE_API_KEY`, `CORS_ALLOWED_ORIGINS`, and `CACHE_TTL_SECONDS`. The remaining rows describe variables to add only with their corresponding features.
+The scaffold implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_TIMEOUT_SECONDS`, `CORS_ALLOWED_ORIGINS`, and `CACHE_TTL_SECONDS`. The remaining rows describe variables to add only with their corresponding features.
 
 | Variable | Exposure | Production rule |
 | --- | --- | --- |
@@ -41,6 +41,7 @@ The scaffold implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `GOOGLE_
 | `SEC_IDENTITY` | Server | Required and must contain an application name plus monitored email. |
 | `AI_PROVIDER` | Server | Explicit production provider, initially `gemini`. No implicit local fallback. |
 | `GEMINI_MODEL` | Server | Required or have a reviewed default; model changes must be observable. |
+| `GEMINI_TIMEOUT_SECONDS` | Server | Explicit bounded provider timeout; defaults to 30 seconds and may not exceed 120. |
 | `GOOGLE_API_KEY` | Secret | Required only when Gemini is enabled. Never logged or returned. |
 | `CORS_ALLOWED_ORIGINS` | Server | Required exact comma-separated origins. Wildcard rejected. |
 | `EXTERNAL_REQUEST_TIMEOUT_SECONDS` | Server | Positive bounded integer. |

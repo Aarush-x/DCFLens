@@ -12,7 +12,7 @@
 7. Checklist engine evaluates numeric rules from normalized facts
 8. Filing extractor collects bounded, labeled sections and Exhibit 21
 9. Gemini returns schema-constrained qualitative findings with evidence IDs
-10. API validates findings and builds an optional AI scenario
+10. API validates findings, applies three code-bounded adjustments, and recalculates one final valuation
 11. API returns valuation, checklist, claims, evidence, warnings, and freshness
 12. Web renders results with direct source links
 ```
@@ -73,7 +73,8 @@ The prompt contains compact normalized facts with evidence IDs, labeled filing e
 The response keeps these layers separate:
 
 - `baseline_valuation`: deterministic output.
-- `scenarios`: user-authored or optional AI-proposed assumptions.
+- `adjustments`: baseline, bounded AI delta, final assumption, rationale, evidence, and isolated valuation impact.
+- `final_valuation`: one deterministic-engine result plus a non-probabilistic sensitivity interval.
 - `checklist`: status, computation, and evidence references per item.
 - `claims`: qualitative statements with evidence references and confidence labels.
 - `evidence`: primary-source metadata and locators.
@@ -89,5 +90,5 @@ The response keeps these layers separate:
 | Insufficient facts | Return partial evidence and explain which valuation inputs are missing. |
 | Filing section unavailable | Continue deterministic analysis and mark affected qualitative checks `UNKNOWN`. |
 | Gemini timeout or invalid JSON | Preserve baseline result and mark AI analysis unavailable. |
-| Invalid AI evidence ID | Reject the claim or entire model payload according to the schema policy. |
+| Invalid AI evidence ID | Reject the entire model payload and preserve the deterministic result. |
 | Cache hit | Return original source timestamps and a clear cache age. |

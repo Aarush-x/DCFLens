@@ -10,6 +10,8 @@ def test_development_defaults_are_safe() -> None:
     assert settings.cache_ttl_seconds == 900
     assert settings.cors_allowed_origins == ("http://localhost:3000",)
     assert settings.google_api_key is None
+    assert settings.gemini_model == "gemini-2.5-flash"
+    assert settings.gemini_timeout_seconds == 30
 
 
 def test_unknown_application_environment_is_rejected() -> None:
@@ -53,6 +55,8 @@ def test_production_configuration_is_normalized() -> None:
             "LOG_LEVEL": "warning",
             "CACHE_TTL_SECONDS": "1200",
             "GOOGLE_API_KEY": " example-placeholder ",
+            "GEMINI_MODEL": "gemini-2.5-flash",
+            "GEMINI_TIMEOUT_SECONDS": "45",
             "SEC_IDENTITY": "DCFLens owner@example.com",
             "CORS_ALLOWED_ORIGINS": (
                 "https://dcflens.example.com/, https://preview.example.com"
@@ -62,6 +66,8 @@ def test_production_configuration_is_normalized() -> None:
 
     assert settings.log_level == "WARNING"
     assert settings.cache_ttl_seconds == 1200
+    assert settings.gemini_model == "gemini-2.5-flash"
+    assert settings.gemini_timeout_seconds == 45
     assert settings.cors_allowed_origins == (
         "https://dcflens.example.com",
         "https://preview.example.com",
