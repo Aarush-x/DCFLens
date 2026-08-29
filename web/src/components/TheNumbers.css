@@ -33,6 +33,23 @@
 
 .delta { font-family: var(--m); font-size: 13px }
 
+/* The range is the headline, so it must never wrap into a second line and change
+   the card's height — mono at 38px puts "$1,234 – $5,678" inside the 358px the
+   1fr aside column leaves after .box padding, with room to spare. */
+.big2 { white-space: nowrap }
+
+/* The mid, demoted. Same size as .delta so the two secondary lines below the
+   headline read as one block, but --faint rather than a traffic light: it is
+   detail, not a signal. 3px of separation keeps the card's rhythm — 10 above the
+   figure, 4 below it, then these two lines — matching the box padding and the
+   .scn / .bel spacing in the two cards underneath. */
+.midline {
+  font-family: var(--m);
+  font-size: 13px;
+  color: var(--faint);
+  margin: 0 0 3px;
+}
+
 /* "If things go…" rows */
 .scn {
   display: flex;
