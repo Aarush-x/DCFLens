@@ -4,6 +4,8 @@
 
 A DCFLens result is only inspectable if every material number and qualitative claim can be traced to a primary source and every transformation is recorded. Provenance is part of the domain model, not display-only metadata.
 
+The implemented SEC `EvidenceReference` and annual normalization rules are specified in [sec-ingestion.md](sec-ingestion.md).
+
 ## Evidence record
 
 Each source fact or excerpt receives a stable evidence ID and records:

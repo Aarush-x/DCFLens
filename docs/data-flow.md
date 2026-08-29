@@ -31,6 +31,8 @@ The SEC ticker map resolves the canonical ticker to a zero-padded CIK. Class-sha
 
 The SEC client requests Company Facts with `SEC_IDENTITY` as the user agent. Raw responses receive a retrieval timestamp and content hash. The client honors configured timeouts, backoff, caching, and SEC access policies.
 
+The implemented client also resolves ticker to CIK, parses recent 10-K and 10-K/A metadata, and retrieves the accession-specific latest annual filing. Its exact contract is documented in [sec-ingestion.md](sec-ingestion.md).
+
 ### 4. Normalization
 
 For each target metric, the normalizer:
@@ -45,6 +47,8 @@ For each target metric, the normalizer:
 8. Produces derived facts such as `free_cash_flow = operating_cash_flow - abs(capital_expenditure)` with input references.
 
 DCFLens must not copy DeltaDCF's final reduction to plain values because that discards accession and concept provenance.
+
+The implemented normalizer preserves comparative periods and every selected input as an `EvidenceReference`. Missing or conflicting facts remain explicit rather than becoming zero.
 
 ### 5. Deterministic valuation
 

@@ -66,7 +66,7 @@ DCFLens/
 | --- | --- | --- |
 | `apps/web` | Input, analysis state, scenario controls, evidence navigation | Provider secrets, DCF formulas, SEC normalization |
 | API routes | Validation, authorization if added, response status, orchestration | Provider-specific parsing details |
-| SEC adapter | HTTP identity, rate limits, raw SEC payloads | Valuation decisions |
+| SEC adapter | HTTP identity, pacing, bounded retries/cache, raw SEC payloads, and annual fact provenance | Valuation decisions |
 | Normalizer | Concept aliases, units, periods, restatement selection | Model-generated interpretation |
 | Valuation engine | Pure numeric calculation and guards | Network access or AI calls |
 | Checklist engine | Rule evaluation and evidence requirements | Unvalidated model output |

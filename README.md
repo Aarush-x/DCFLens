@@ -14,6 +14,7 @@ The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized F
 | [Deployment architecture](docs/deployment-architecture.md) | Vercel, Render, Docker, configuration, health checks, and rollback model |
 | [Valuation methodology](docs/valuation-methodology.md) | Deterministic DCF formulas, assumptions, scenarios, and validation rules |
 | [DCF engine contract](docs/dcf-engine.md) | Implemented formulas, units, validation, decomposition, and assumption sensitivity |
+| [SEC ingestion contract](docs/sec-ingestion.md) | EDGAR access, pacing, retries, caching, normalization, and fact-level provenance |
 | [AI trust boundaries](docs/ai-trust-boundaries.md) | What Gemini may do, what it may not do, and required safeguards |
 | [Evidence provenance](docs/evidence-provenance.md) | Source identity, locators, transformation records, and claim citation rules |
 | [DeltaDCF 10-point checklist](docs/deltadcf-checklist.md) | The reference checklist preserved unchanged |
@@ -76,8 +77,9 @@ Next.js uses `http://localhost:8000` only as the development fallback. Vercel pr
 ## Current status
 
 - Next.js and FastAPI scaffolds plus a route-independent deterministic DCF engine
+- SEC EDGAR client and annual financial-fact normalizer with claim-level evidence
 - Centralized frontend API URL validation
 - Production-oriented Docker and Render configuration
-- No valuation API route, SEC ingestion, Gemini, or evidence pipeline implementation
+- No valuation/SEC API route, Gemini, filing-section extraction, or frontend integration
 - No deployment performed
 - No remote repository changes made
