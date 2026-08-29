@@ -63,7 +63,7 @@ Facts are grouped by fiscal period end, preserving comparative periods. The norm
 
 Exact duplicates are removed. Within one concept and period, the latest-filed value is selected and differing prior values generate `restated_fact_selected`. A selected `10-K/A` generates `amended_filing_selected`.
 
-When several configured concepts exist for the same metric and period, concept order is authoritative. A lower-priority concept never replaces a higher-priority concept merely because it was filed later. Differing values generate `alternative_concept_conflict`. Facts in unexpected units are retained in `rejected_facts` and generate `conflicting_unit_rejected`.
+When several configured concepts exist for the same metric and period, concept order is authoritative. A lower-priority concept never replaces a higher-priority concept merely because it was filed later. Candidates sharing a period end are ordered by concept priority, then latest filing date, then `10-K/A` ahead of `10-K`, then accession number, so the same payload always yields the same selection. Differing values generate `alternative_concept_conflict`. Facts in unexpected units are retained in `rejected_facts` and generate `conflicting_unit_rejected`.
 
 ## Metric contracts
 
@@ -80,11 +80,11 @@ Concepts are tried from left to right.
 | Operating cash flow | USD | Duration | `NetCashProvidedByUsedInOperatingActivities` |
 | Capital expenditure | USD | Duration | Absolute value of `PaymentsToAcquirePropertyPlantAndEquipment` or `PaymentsToAcquireProductiveAssets` |
 | Free cash flow | USD | Duration | Operating cash flow minus absolute capital expenditure for the exact same start and end dates |
-| Total debt | USD | Instant | Direct total-debt concepts, otherwise matching current plus noncurrent debt components |
-| Cash and short-term investments | USD | Instant | Direct combined concepts, otherwise matching cash plus short-term-investment components |
+| Total debt | USD | Instant | `LongTermDebtAndFinanceLeaseObligations`, `LongTermDebtAndCapitalLeaseObligations`, `LongTermDebt`, otherwise the matching current plus noncurrent components in **Derived facts** |
+| Cash and short-term investments | USD | Instant | `CashCashEquivalentsAndShortTermInvestments`, `CashAndShortTermInvestments`, otherwise the matching cash plus short-term-investment components in **Derived facts** |
 | Inventory | USD | Instant | `InventoryNet`, `InventoryFinishedGoodsNetOfAllowances` |
 | Receivables | USD | Instant | `AccountsReceivableNetCurrent`, `AccountsNotesAndLoansReceivableNetCurrent` |
-| Stockholders' equity | USD | Instant | `StockholdersEquity`, then the noncontrolling-interest-inclusive concept |
+| Stockholders' equity | USD | Instant | `StockholdersEquity`, `StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest` |
 | Total assets | USD | Instant | `Assets` |
 
 No currency conversion occurs. `USD`, `USD/shares`, and `shares` are separate exact units.
@@ -100,6 +100,17 @@ total_debt = current_debt + noncurrent_debt
 cash_and_short_term_investments = cash_and_cash_equivalents
                                   + short_term_investments
 ```
+
+The component concepts are internal. They are never exposed as their own metric keys in the result.
+
+| Component | Concepts, tried in order |
+| --- | --- |
+| `current_debt` | `LongTermDebtAndFinanceLeaseObligationsCurrent`, `LongTermDebtCurrent` |
+| `noncurrent_debt` | `LongTermDebtAndFinanceLeaseObligationsNoncurrent`, `LongTermDebtNoncurrent` |
+| `cash_and_cash_equivalents` | `CashAndCashEquivalentsAtCarryingValue` |
+| `short_term_investments` | `ShortTermInvestments` |
+
+For `total_debt` and `cash_and_short_term_investments`, a directly reported fact wins over the derived sum for the same period end. The derived value fills only the periods where no direct fact exists. `free_cash_flow` has no direct concept and is always derived.
 
 Free-cash-flow components must also share the same period start. A missing component is not treated as zero. When only some components exist, the combined metric remains missing and emits `incomplete_calculation`.
 
@@ -120,7 +131,20 @@ Every reported normalized fact contains an immutable `EvidenceReference` with:
 - direct CIK-specific Company Facts URL;
 - timezone-aware retrieval timestamp.
 
-Calculated facts retain every input evidence reference. Each reference records the derived formula plus its own source transformation, allowing a free-cash-flow, debt, or cash claim to resolve to every contributing SEC fact.
+Every `NormalizedFact` also carries a `quality` of `reported` for a directly selected SEC fact or `calculated` for a derived one. Calculated facts retain every input evidence reference. Each reference records the derived formula plus its own source transformation, allowing a free-cash-flow, debt, or cash claim to resolve to every contributing SEC fact.
+
+## Warning codes
+
+Warnings are descriptive. They never remove a fact from the result or substitute a value. Each carries the metric and, where the warning is period-specific, the fiscal year. Warnings are deduplicated by code, metric, fiscal year, and message.
+
+| Code | Emitted when |
+| --- | --- |
+| `missing_metric` | No eligible annual fact exists for an output metric. The key is still present with an empty tuple and is listed in `missing_metrics`. |
+| `incomplete_calculation` | A derived metric has some but not all of its required components, so it stays missing rather than treating the absent component as zero. |
+| `restated_fact_selected` | One concept reported differing values for one period. The latest-filed value was selected. |
+| `amended_filing_selected` | The selected fact came from a `10-K/A` rather than the original `10-K`. |
+| `alternative_concept_conflict` | A lower-priority concept reported a different value for the same period. The higher-priority concept was kept. |
+| `conflicting_unit_rejected` | Facts existed under a unit other than the metric contract. They are retained in `rejected_facts`. |
 
 ## Partial-data behavior
 

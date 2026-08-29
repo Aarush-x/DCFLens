@@ -14,7 +14,7 @@ The engine does not create bull, base, bear, or other named scenarios. Each call
 | --- | --- | --- |
 | `starting_free_cash_flow` | Currency units per year | Finite. May be negative or zero; a negative value produces a warning rather than being replaced. |
 | `net_debt` | Same currency units as FCF | Finite. Defined as interest-bearing debt minus cash. A negative value represents net cash. |
-| `diluted_shares` | Shares | Finite and strictly greater than zero. |
+| `diluted_shares` | Shares | Finite and strictly greater than zero. The field is typed optional so a missing share count can be passed explicitly; `None` is rejected as `required_number` and never defaulted. |
 | `currency` | Three-letter uppercase currency code | Identifies every monetary output; the engine performs no currency conversion. |
 | `historical_free_cash_flows` | Same currency units per year, oldest to newest | Optional immutable tuple. When present, it contains at least two finite observations. |
 | `stage_one_years` | Years | Integer from 1 through 50. |
@@ -146,3 +146,34 @@ The immutable `DcfResult` contains:
 `DcfResult.to_dict()` recursively expands the dataclasses into primitives suitable for JSON encoding. Calculations use finite IEEE-754 double-precision numbers and are not rounded inside the domain layer. Presentation rounding belongs outside this package.
 
 Invalid inputs raise `DcfValidationError` with machine-readable `field`, `code`, and `message` attributes. No partial valuation is returned after a validation or non-finite-calculation failure.
+
+## Warning codes
+
+Warnings describe the result; they never suppress or replace it. A returned valuation with warnings is still a complete valuation.
+
+| Code | Emitted when |
+| --- | --- |
+| `negative_starting_free_cash_flow` | `starting_free_cash_flow` is below zero. The projection still runs on the negative value. |
+| `unstable_historical_free_cash_flow` | History was supplied and its normalized range is at least `1.0`, or it contains at least one sign change. |
+| `high_terminal_value_concentration` | Terminal concentration is at least `0.75`. |
+| `non_positive_equity_value` | Equity value is zero or negative, so the per-share result is not a meaningful price. |
+
+Codes appear in the order listed above.
+
+## Validation error codes
+
+`DcfValidationError` pairs a `field` with one of these stable codes. Validation runs before any projection, so no partial valuation is returned.
+
+| Code | Fields | Meaning |
+| --- | --- | --- |
+| `required_number` | Any numeric input, including `diluted_shares` | The value is not a real number. Booleans are rejected here. |
+| `not_finite` | Any numeric input | The value is NaN or infinity. |
+| `must_be_positive` | `diluted_shares` | The share count is zero or negative. |
+| `invalid_currency` | `currency` | Not a three-letter uppercase alphabetic code. |
+| `invalid_sequence` | `historical_free_cash_flows` | Not an immutable tuple. |
+| `insufficient_history` | `historical_free_cash_flows` | Non-empty but shorter than two observations. |
+| `invalid_duration` | `stage_one_years`, `stage_two_years` | Not an integer. |
+| `out_of_range` | Stage durations, `projection_years`, growth rates, `discount_rate`, both sensitivity deltas | Outside the bounds stated in **Inputs and units**. |
+| `invalid_rate_relationship` | `discount_rate` | The discount rate is at or below terminal growth. |
+| `invalid_interval` | `sensitivity` | A perturbed endpoint violates a normal validation rule. The engine never clamps it. |
+| `non_finite_result` | `calculation` | A projection or terminal calculation overflowed to a non-finite value. |

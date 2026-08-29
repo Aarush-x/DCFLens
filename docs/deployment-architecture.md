@@ -26,6 +26,7 @@ The repository-root Blueprint retains the useful DeltaDCF shape:
 - `dockerfilePath: ./apps/api/Dockerfile`
 - `healthCheckPath: /health`
 - `autoDeployTrigger: checksPass`
+- `plan: free`, which the load targets below must revisit
 
 The container uses a supported Python 3.12 slim Bookworm base, installs only runtime dependencies, copies only the API application, and runs as a non-root user. Its `python -m app` entry point imports `app.main:app`, binds `0.0.0.0`, respects Render's `PORT`, and defaults to port `8000`. The Docker health check uses the Python standard library rather than installing `curl` only for health checks.
 
@@ -104,4 +105,4 @@ The scaffold phase executes these checks locally where tooling is available. The
 - Render instances have ephemeral disks. Durable analysis and evidence URLs require an external persistence decision.
 - In-memory caches reset on restart and do not coordinate across instances.
 - Vercel preview origins and Render CORS need an explicit access policy.
-- Provider quotas, cold starts, retries, and concurrency limits need load targets before plan selection.
+- Provider quotas, cold starts, retries, and concurrency limits need load targets. The Blueprint currently pins the free plan, which sleeps when idle and is not a reviewed capacity decision.
