@@ -1,23 +1,34 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { fixtureTickers } from "@/fixtures/analysis";
 
 export function TickerForm() {
+  const router = useRouter();
   const [ticker, setTicker] = useState("AAPL");
   const [message, setMessage] = useState("");
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalizedTicker = ticker.trim().toUpperCase();
+
     if (!normalizedTicker) {
       setMessage("Enter a ticker symbol to continue.");
-    } else if (normalizedTicker !== "AAPL") {
-      setMessage(`${normalizedTicker} is not in this static preview. Live analysis will be connected later.`);
-    } else {
-      setMessage("AAPL fixture loaded above. Live API requests are intentionally disabled.");
+      return;
     }
+    if (!fixtureTickers.includes(normalizedTicker)) {
+      setMessage(
+        `${normalizedTicker} is not in this fixture preview. Available: ${fixtureTickers.join(", ")}.`,
+      );
+      return;
+    }
+
+    setMessage(`Opening the ${normalizedTicker} fixture analysis.`);
+    router.push(`/analysis/${normalizedTicker}`);
   }
 
   return (
@@ -34,8 +45,10 @@ export function TickerForm() {
         spellCheck={false}
         value={ticker}
       />
-      <Button type="submit">Review fixture</Button>
-      <p className="form-message" aria-live="polite">{message || "Fixture mode · no live provider calls"}</p>
+      <Button type="submit">Open analysis</Button>
+      <p className="form-message" aria-live="polite">
+        {message || `Fixture mode · ${fixtureTickers.join(", ")}`}
+      </p>
     </form>
   );
 }

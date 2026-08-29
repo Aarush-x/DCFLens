@@ -29,3 +29,4 @@ venv/
 .vscode/
 *.log
 npm-debug.log*
+.gstack/
