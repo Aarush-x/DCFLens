@@ -1,0 +1,40 @@
+/* ── DCFLens palette — SINGLE SOURCE OF TRUTH ──────────────────────────────
+   Pasted verbatim from design/index.html. Must stay diff-identical to
+   docs/DESIGN.md §3. Do not reformat, rename, or convert to Tailwind
+   colours. tailwind.config.js maps to these variables, never to hexes. */
+/* ── DCFLens design system — Clash/Satoshi/Geist Mono + Signal Green ──
+   Palette locked 2026-08-29 (docs/DECISIONS.md D-014). Twelve alternate
+   palettes and five alternate type systems were removed; they live in
+   docs/DESIGN.md §3 if any of it is ever needed again. */
+:root{
+  /* type */
+  --fd:"Clash Display",sans-serif;   /* display face   */
+  --f:"Satoshi",sans-serif;          /* body face      */
+  --m:"Geist Mono",ui-monospace,monospace;
+  --dw:600;             /* display weight  */
+  --dt:-.015em;         /* display tracking */
+  --di:normal;          /* accent style    */
+  --bw:400;             /* body weight     */
+
+  /* colour */
+  --ink:#000000;        /* page background */
+  --surface:#0B0B0C;    /* card / input fill */
+  --cardbg:#0B0B0C;     /* landing card fill */
+  --cream:#FFFFFF;      /* primary text    */
+  --dim:#8E8E93;        /* secondary text  */
+  --faint:#5B5B60;      /* labels, axis    */
+  --hair:#1A1A1C;       /* 1px borders     */
+  --hair2:#2E2E31;      /* hover borders   */
+  --accent:#00E676;     /* CTAs, wipe, hero word */
+  --accent-fg:#000000;  /* text on accent  */
+  --hero:#00E676;
+  --under:#00E676;      /* looks cheap     */
+  --fair:#FFD60A;       /* fairly priced   */
+  --over:#FF453A;       /* looks expensive */
+  --hdr:0,0,0;          /* header fade rgb */
+  --trackbg:rgba(255,255,255,.10);
+  --bandbg:rgba(255,255,255,.20);
+  --hoverbg:rgba(255,255,255,.045);
+  --cardshadow:0 26px 70px -34px rgba(0,230,118,.45);
+  --grain:.016;
+}
