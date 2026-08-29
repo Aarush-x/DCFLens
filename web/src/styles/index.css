@@ -138,11 +138,16 @@
     background: linear-gradient(180deg, rgba(var(--hdr), .92), rgba(var(--hdr), 0));
     backdrop-filter: blur(10px);
   }
-  .mark { font-weight: 700; font-size: 17px; letter-spacing: -.03em; cursor: pointer }
-  .mark span { color: var(--faint); font-weight: 500 }
+  /* Deliberate deviation from design/index.html. The mockup puts both "Lens" and
+     the tagline on --faint — the token DESIGN.md §3 already flags as failing AA —
+     so at 17px on pure black the wordmark vanished beside the hero type.
+     The DCF/Lens split now carries on WEIGHT instead of a contrast drop, so the
+     whole name stays legible and still reads as one mark. */
+  .mark { font-weight: 700; font-size: 21px; letter-spacing: -.035em; cursor: pointer; line-height: 1.05 }
+  .mark span { color: var(--cream); font-weight: 400 }
   .mark small {
-    display: block; font-family: var(--m); font-size: 9px; letter-spacing: .22em;
-    color: var(--faint); font-weight: 400; margin-top: 2px;
+    display: block; font-family: var(--m); font-size: 9.5px; letter-spacing: .18em;
+    color: var(--dim); font-weight: 400; margin-top: 4px;
   }
   .nav { display: flex; gap: 8px; align-items: center }
 
