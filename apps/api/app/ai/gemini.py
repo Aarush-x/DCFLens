@@ -90,6 +90,21 @@ class GeminiClient:
         self._opener = opener
 
     def generate(self, request: ProviderRequest) -> str:
+        return self._generate(request, include_response_schema=True)
+
+    def _generate(
+        self,
+        request: ProviderRequest,
+        *,
+        include_response_schema: bool,
+    ) -> str:
+        generation_config: dict[str, Any] = {
+            "responseMimeType": "application/json",
+            "temperature": 0.1,
+            "maxOutputTokens": 4096,
+        }
+        if include_response_schema:
+            generation_config["responseJsonSchema"] = request.response_schema
         body = json.dumps(
             {
                 "systemInstruction": {
@@ -101,12 +116,7 @@ class GeminiClient:
                         "parts": [{"text": request.prompt}],
                     }
                 ],
-                "generationConfig": {
-                    "responseMimeType": "application/json",
-                    "responseJsonSchema": request.response_schema,
-                    "temperature": 0.1,
-                    "maxOutputTokens": 4096,
-                },
+                "generationConfig": generation_config,
             },
             separators=(",", ":"),
         ).encode("utf-8")
@@ -141,6 +151,19 @@ class GeminiClient:
                 provider_reason=provider_reason,
                 provider_message=provider_message,
             )
+            if (
+                fallback_reason == "provider_invalid_request"
+                and include_response_schema
+            ):
+                logger.warning(
+                    "gemini_schema_rejected_retrying_json_mode",
+                    extra={
+                        "http_status": exc.code,
+                        "provider_status": provider_status,
+                        "gemini_model": self._config.model,
+                    },
+                )
+                return self._generate(request, include_response_schema=False)
             diagnostics = {
                 "http_status": exc.code,
                 "provider_status": provider_status,

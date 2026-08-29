@@ -243,3 +243,58 @@ def test_gemini_client_redacts_api_key_from_logged_provider_message(
 
     assert api_key not in caplog.text
     assert "[REDACTED]" in caplog.records[-1].provider_message
+
+
+def test_gemini_client_retries_schema_rejection_once_in_json_mode(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    requests: list[object] = []
+    error_body = json.dumps(
+        {
+            "error": {
+                "code": 400,
+                "status": "INVALID_ARGUMENT",
+                "message": "The response schema is too complex.",
+            }
+        }
+    ).encode()
+    response_text = json.dumps({"example": "valid"})
+    success_body = json.dumps(
+        {"candidates": [{"content": {"parts": [{"text": response_text}]}}]}
+    ).encode()
+
+    def opener(request, *, timeout: float):
+        requests.append(request)
+        if len(requests) == 1:
+            raise HTTPError(
+                "https://generativelanguage.googleapis.com/redacted",
+                400,
+                "bad request",
+                hdrs=None,
+                fp=BytesIO(error_body),
+            )
+        return FakeResponse(success_body)
+
+    client = GeminiClient(
+        GeminiClientConfig(api_key="secret-placeholder"), opener=opener
+    )
+    provider_request = ProviderRequest(
+        "system",
+        "prompt",
+        {"type": "object", "properties": {"example": {"type": "string"}}},
+    )
+
+    with caplog.at_level("WARNING", logger="app.ai.gemini"):
+        result = client.generate(provider_request)
+
+    assert result == response_text
+    assert len(requests) == 2
+    first_body = json.loads(requests[0].data)
+    retry_body = json.loads(requests[1].data)
+    assert "responseJsonSchema" in first_body["generationConfig"]
+    assert "responseJsonSchema" not in retry_body["generationConfig"]
+    assert retry_body["generationConfig"]["responseMimeType"] == "application/json"
+    assert any(
+        record.message == "gemini_schema_rejected_retrying_json_mode"
+        for record in caplog.records
+    )
