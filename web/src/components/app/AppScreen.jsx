@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { useAnalysis, readParams } from '../../lib/useAnalysis.js'
@@ -11,7 +11,10 @@ import RecentRail, { seedHistory, pushHistory, nameFor } from './RecentRail.jsx'
 import TopBar from './TopBar.jsx'
 import SearchState from './SearchState.jsx'
 import SourcesFooter from './SourcesFooter.jsx'
-import Eyebrow from '../ui/Eyebrow.jsx'
+import LoadingNarration from './LoadingNarration.jsx'
+import RequestFailed from './RequestFailed.jsx'
+import { unresolvedQuery } from '../../lib/failure.js'
+import { cleanName } from '../../lib/format.js'
 import Card from '../ui/Card.jsx'
 import Label from '../ui/Label.jsx'
 import './app.css'
@@ -80,15 +83,43 @@ export default function AppScreen({ onBack }) {
 
   const { data, loading, error } = useAnalysis(selected?.ticker ?? null)
 
+  /* The rail names a company as soon as it is opened, but a ticker typed into the
+     search field arrives as its own symbol — "TSLA · TSLA" — because we keep no
+     name-to-ticker index and won't guess at one. The response does carry the name,
+     so the row is corrected the moment it lands rather than being pre-filled with
+     a guess.
+
+     Only rows still showing their own symbol are touched. What the API returns is
+     the SEC registrant name — "MICROSOFT CORP", "COSTCO WHOLESALE CORP /NEW" —
+     which is worse to read than the curated one a seeded row already carries.
+     Naming an unnamed row is a gain; shouting over a named one is not. The guard
+     also stops this from looping. */
+  useEffect(() => {
+    const name = cleanName(data?.company_name)
+    const t = data?.ticker
+    if (!name || !t) return
+    const unnamed = (e) => e.ticker === t && (!e.name || e.name === e.ticker)
+    setHistory((h) => (h.some(unnamed) ? h.map((e) => (unnamed(e) ? { ...e, name } : e)) : h))
+    setSelected((sel) => (sel && unnamed(sel) ? { ...sel, name } : sel))
+  }, [data])
+
   function open(entry) {
     setHistory((h) => pushHistory(h, entry))
-    setSelected(entry)
+    setSelected({ ...entry, failure: null })
     window.scrollTo(0, 0)
   }
 
+  /* A query the resolver cannot read is reported, not swallowed. Pressing Enter
+     and having nothing whatsoever happen is the worst of the available answers —
+     it looks like the app is broken rather than like the input was. No request is
+     sent: we already know the API would reject it, and a wasted round trip on a
+     cold container costs the user thirty seconds to learn nothing. */
   function search(query) {
     const ticker = resolveTicker(query)
-    if (!ticker) return
+    if (!ticker) {
+      setSelected({ ticker: null, name: null, failure: unresolvedQuery(String(query).trim()) })
+      return
+    }
     open({ ticker, name: nameFor(ticker) ?? ticker })
   }
 
@@ -99,8 +130,13 @@ export default function AppScreen({ onBack }) {
         /* Whatever is actually on screen, not what was clicked — a capture that
            opened the result with no ticker of its own still highlights the company
            the payload names. Nothing is highlighted on the search state: no company
-           is open there, and a lit row would say one was. */
-        active={selected ? selected.ticker ?? data?.ticker ?? null : null}
+           is open there, and a lit row would say one was.
+
+           A query that never became a ticker gets the same treatment. It has no
+           ticker of its own, so without the `failure` guard it would fall through
+           to whatever `data` was last holding — lighting Apple while the screen
+           says we don't recognise what you typed. */
+        active={selected && !selected.failure ? selected.ticker ?? data?.ticker ?? null : null}
         onSelect={open}
         onHome={onBack}
       />
@@ -112,7 +148,15 @@ export default function AppScreen({ onBack }) {
 
         {!selected
           ? <SearchState onSubmit={search} />
-          : <Result data={data} loading={loading} error={error} ticker={selected.ticker} />}
+          : (
+            <Result
+              data={data}
+              loading={loading}
+              error={selected.failure ?? error}
+              ticker={selected.ticker}
+              name={selected.name}
+            />
+          )}
       </main>
     </div>
   )
@@ -120,9 +164,12 @@ export default function AppScreen({ onBack }) {
 
 /* ── the analysis screen ─────────────────────────────────────────────────────── */
 
-function Result({ data, loading, error, ticker }) {
-  if (loading) return <Loading ticker={ticker} />
-  if (error) return <Failed error={error} />
+function Result({ data, loading, error, ticker, name }) {
+  /* A query that never became a ticker fails before any request is made, so it
+     outranks the hook — which is still sitting on whatever the last company left
+     behind. */
+  if (error) return <RequestFailed error={error} ticker={ticker} />
+  if (loading) return <LoadingNarration key={ticker ?? 'mock'} ticker={ticker} name={name} />
   if (!data) return null
 
   return <Analysis data={data} />
@@ -206,37 +253,5 @@ function AiFallbackNotice({ reason }) {
         {reason ? ` (${reason})` : ''}
       </p>
     </Card>
-  )
-}
-
-function Loading({ ticker }) {
-  return (
-    <div data-state="loading">
-      <Eyebrow>{ticker ? `Reading ${ticker}’s filings…` : 'Reading the filings…'}</Eyebrow>
-      <h1 className="verdict" style={{ color: 'var(--faint)' }}>One moment</h1>
-      <p style={{ fontSize: 17, color: 'var(--dim)', maxWidth: '54ch', lineHeight: 1.55 }}>
-        We&rsquo;re pulling the latest annual report from SEC EDGAR and doing the maths.
-      </p>
-    </div>
-  )
-}
-
-/* A load that never arrived is not the same as a company we decline to value, and
-   it must not borrow the designed refusal — that state means "we read the filings
-   and won't publish a number", which would be a lie here. */
-function Failed({ error }) {
-  return (
-    <div data-state="error">
-      <Eyebrow>Nothing to show</Eyebrow>
-      <h1 className="verdict" style={{ color: 'var(--faint)' }}>We couldn’t load this</h1>
-      <p style={{ fontSize: 17, color: 'var(--dim)', maxWidth: '54ch', lineHeight: 1.55, marginBottom: 34 }}>
-        This is a problem on our side, not a judgement about the company. Try another
-        company from the rail, or the same one again in a moment.
-      </p>
-      <Card variant="box">
-        <Label>What went wrong</Label>
-        <p style={{ color: 'var(--dim)', margin: '10px 0 0', fontSize: 14.5 }}>{error.message}</p>
-      </Card>
-    </div>
   )
 }
