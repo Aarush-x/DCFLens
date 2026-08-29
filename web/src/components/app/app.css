@@ -1,0 +1,33 @@
+/* ── The app screen's own chrome, ported verbatim from design/index.html ──
+   Everything shared with the landing (.rail, .main, .topbar, .search, .verdict,
+   .panes, .sources) already lives in src/styles/index.css. What is here is the
+   search-first default state and the empty rail that goes with it. */
+
+/* ── Search-first default (design/index.html, 2026-08-30) ──
+   The app opens on an empty search, never on a company.
+
+   Centred on the VIEWPORT, not on the column. Two things push it right: the rail
+   takes --railw off the left, and .main is capped at max-width and left aligned
+   inside its track. Rather than chase both with an offset, the search state
+   breaks out of the column and centres on the viewport itself. */
+.hunt {
+  min-height: 78vh;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  text-align: center; max-width: none;
+  width: 100vw; margin-left: calc(-1 * (var(--railw) + var(--mainpad)));
+}
+.hunt h1 {
+  font-family: var(--fd); font-weight: 700; letter-spacing: -.035em;
+  font-size: clamp(34px, 5vw, 62px); line-height: 1.04; margin: 0 0 20px; max-width: 16ch;
+}
+.hunt p { margin: 0 0 46px; font-size: 16px; line-height: 1.6; color: var(--dim); max-width: 52ch }
+
+.hunt .bigsearch { width: min(100%, 620px); border-bottom: 1px solid var(--hair2); padding-bottom: 16px }
+.hunt .bigsearch input {
+  width: 100%; background: none; border: 0; outline: 0; color: var(--cream);
+  text-align: center; font-family: var(--f); font-size: clamp(20px, 2.6vw, 30px); letter-spacing: -.02em;
+}
+.hunt .bigsearch input::placeholder { color: var(--faint) }
+
+/* The rail before it has earned a row. */
+.railempty { padding: 2px 22px; font-size: 12.5px; line-height: 1.6; color: var(--dim) }

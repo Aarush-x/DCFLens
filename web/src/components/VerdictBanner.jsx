@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
-import { price, range } from '../lib/format.js'
+import { price, range, cleanName } from '../lib/format.js'
 import Eyebrow from './ui/Eyebrow.jsx'
 import Label from './ui/Label.jsx'
 
@@ -69,7 +69,8 @@ function asOfLabel(iso) {
  *  Empty when we know none of the three, which renders no line at all. */
 function eyebrowText(data) {
   const asOf = asOfLabel(data.as_of ?? data.retrievedAt)
-  return [data.company_name, data.ticker, asOf && `as of ${asOf}`].filter(Boolean).join(' · ')
+  return [cleanName(data.company_name), data.ticker, asOf && `as of ${asOf}`]
+    .filter(Boolean).join(' · ')
 }
 
 export default function VerdictBanner({ data }) {

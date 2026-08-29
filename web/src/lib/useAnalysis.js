@@ -2,15 +2,21 @@ import { useEffect, useState } from 'react'
 
 /* The only place in the app that loads an analysis. Nothing else may fetch.
  *
- * Today it serves the committed mocks. Flip USE_LIVE_API to true to hit the real
- * backend — the adapter is already wired on both paths. The live response is the
- * AnalysisEnvelope, and toView() (1A.2) is what turns it into the docs/API.md v2
- * shape components read. No component ever sees the raw envelope.
+ * ── Which source, and why ────────────────────────────────────────────────────
+ * An explicit `?mock=` in the URL ALWAYS wins. That is what check.sh drives, and
+ * it has to be deterministic: a gate that depends on Render's free tier waking up
+ * is a gate that fails for reasons that have nothing to do with the code.
+ *
+ * Otherwise a ticker goes to the live API, so the rail and the search field
+ * actually work. With neither, the default mock stands in — which is what
+ * `?view=app&state=result` renders for the parity capture.
+ *
+ * The live response is the AnalysisEnvelope, and toView() (1A.2) is what turns it
+ * into the docs/API.md v2 shape components read. No component ever sees the raw
+ * envelope, whichever door it came through.
  */
 
 import { toView } from './adapter.js'
-
-const USE_LIVE_API = false
 
 /* Lazy glob, so a mock that is not committed is simply absent rather than a
    build error. */
@@ -24,14 +30,24 @@ const MOCKS = {
 
 export const DEFAULT_MOCK = 'aapl'
 
-/** Read the check-harness overrides off the URL: ?mock=novalue&status=DETERMINISTIC_FALLBACK */
+/** Read the check-harness overrides off the URL:
+ *  ?view=app&state=result&mock=novalue&status=DETERMINISTIC_FALLBACK&ticker=MSFT
+ *
+ *  `mockExplicit` is the one that matters: it separates "the caller asked for this
+ *  mock" from "nothing was asked for, so `mock` fell back to the default". Only the
+ *  first may override the live API. */
 export function readParams(search = window.location.search) {
   const q = new URLSearchParams(search)
+  const mock = q.get('mock')
   return {
-    mock: q.get('mock') || DEFAULT_MOCK,
+    mock: mock || DEFAULT_MOCK,
+    mockExplicit: Boolean(mock),
     ticker: q.get('ticker') || null,
     status: q.get('status') || null,
     view: q.get('view') || null,
+    // design/index.html's own capture parameter: the app opens on search unless
+    // this says otherwise.
+    state: q.get('state') || null,
   }
 }
 
@@ -69,8 +85,8 @@ export function useAnalysis(ticker) {
       setState({ data: null, loading: true, error: null })
       try {
         let data
-        if (USE_LIVE_API && ticker) {
-          const res = await fetch(`/api/analyze/${ticker}`)
+        if (ticker && !params.mockExplicit) {
+          const res = await fetch(`/api/analyze/${encodeURIComponent(ticker)}`)
           const body = await res.json()
           // 4xx is not a crash. "We can't value this" is a designed state, and
           // toView turns the error body into it (product non-negotiable #3).

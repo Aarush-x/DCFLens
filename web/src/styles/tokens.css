@@ -37,4 +37,6 @@
   --hoverbg:rgba(255,255,255,.045);
   --cardshadow:0 26px 70px -34px rgba(0,230,118,.45);
   --grain:.016;
+  --railw:232px;      /* app rail — the search state offsets against it */
+  --mainpad:46px;     /* .main horizontal padding, same reason */
 }

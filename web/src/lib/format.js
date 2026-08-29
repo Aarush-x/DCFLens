@@ -73,3 +73,13 @@ export function range(low, high) {
   return `${priceShort(low)} – ${priceShort(high)}`
 }
 
+
+/** EDGAR marks a re-registered filer with a trailing "/NEW", "/DE", "/MD" and the
+ *  like — "COSTCO WHOLESALE CORP /NEW". It is registry bookkeeping, not part of the
+ *  company's name, and on screen it reads as a typo. Nothing else is touched: the
+ *  legal name, its casing and its "Inc." all survive, because that is what the
+ *  mockup's eyebrow shows. Returns null for anything unusable. */
+export function cleanName(name) {
+  if (typeof name !== 'string' || !name.trim()) return null
+  return name.replace(/\s*\/[A-Za-z]{2,4}\/?\s*$/, '').trim() || null
+}

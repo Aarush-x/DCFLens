@@ -1,65 +1,69 @@
 /* The right-hand "The numbers" column.
-   Ported verbatim from design/index.html (.box .cap/.big2/.delta/.scn/.bel/.belnote)
-   and design/app.html (.big, the cannot-value figure). Co-located rather than added
-   to src/styles/index.css because these classes are used by this column only, and
-   index.css is shared with the other 1B components.
+ Ported verbatim from design/index.html (.box .cap/.big2/.delta/.scn/.bel/.belnote)
+ and design/app.html (.big, the cannot-value figure). Co-located rather than added
+ to src/styles/index.css because these classes are used by this column only, and
+ index.css is shared with the other 1B components.
 
-   .box and .lbl already live in index.css — they are shared primitives (ui/Card,
-   ui/Label) and are NOT redefined here. */
-@layer components {
-  .cap {
-    font-family: var(--m);
-    font-size: 10.5px;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-    color: var(--faint);
-  }
+ .box and .lbl already live in index.css — they are shared primitives (ui/Card,
+ ui/Label) and are NOT redefined here.
 
-  /* .big2 in index.html, .big in app.html — identical rules, both kept so the
-     ported markup reads the same as the mockup it came from. */
-  .big2,
-  .num-big {
-    font-family: var(--m);
-    font-size: 38px;
-    font-weight: 600;
-    letter-spacing: -.03em;
-    margin: 10px 0 4px;
-  }
+ NOT wrapped in `@layer components`. A co-located sheet is its own PostCSS entry
+ and carries no `@tailwind components` directive, so Tailwind rejects the layer
+ outright — the file only ever built because nothing imported it until the app
+ screen was assembled. Unlayered also matches RangeBar.css, PlainEnglish.css and
+ WhyDrawer.css, and nothing here collides with a name index.css defines. */
+.cap {
+  font-family: var(--m);
+  font-size: 10.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
 
-  .delta { font-family: var(--m); font-size: 13px }
+/* .big2 in index.html, .big in app.html — identical rules, both kept so the
+   ported markup reads the same as the mockup it came from. */
+.big2,
+.num-big {
+  font-family: var(--m);
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: -.03em;
+  margin: 10px 0 4px;
+}
 
-  /* "If things go…" rows */
-  .scn {
-    display: flex;
-    justify-content: space-between;
-    padding: 11px 0;
-    font-size: 13.5px;
-    border-bottom: 1px solid var(--hair);
-  }
-  .scn:last-child { border: none }
-  .scn .n { color: var(--dim) }
-  .scn .v { font-family: var(--m); font-weight: 600 }
+.delta { font-family: var(--m); font-size: 13px }
 
-  /* "What has to be true" rows */
-  .bel { display: flex; justify-content: space-between; padding: 9px 0; font-size: 13.5px }
-  .bel .k { color: var(--dim) }
-  .bel .v { font-family: var(--m); font-weight: 600 }
-  .belnote {
-    font-size: 13px;
-    color: var(--faint);
-    line-height: 1.6;
-    margin: 14px 0 0;
-    padding-top: 14px;
-    border-top: 1px solid var(--hair);
-  }
+/* "If things go…" rows */
+.scn {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 0;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--hair);
+}
+.scn:last-child { border: none }
+.scn .n { color: var(--dim) }
+.scn .v { font-family: var(--m); font-weight: 600 }
 
-  /* One quiet line where a figure would have been. Same weight as .belnote, but it
-     sits under a value rather than after a list. Used for the price gap. */
-  .numnote {
-    font-size: 13px;
-    color: var(--faint);
-    line-height: 1.55;
-    margin: 6px 0 0;
-    max-width: 30ch;
-  }
+/* "What has to be true" rows */
+.bel { display: flex; justify-content: space-between; padding: 9px 0; font-size: 13.5px }
+.bel .k { color: var(--dim) }
+.bel .v { font-family: var(--m); font-weight: 600 }
+.belnote {
+  font-size: 13px;
+  color: var(--faint);
+  line-height: 1.6;
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--hair);
+}
+
+/* One quiet line where a figure would have been. Same weight as .belnote, but it
+   sits under a value rather than after a list. Used for the price gap. */
+.numnote {
+  font-size: 13px;
+  color: var(--faint);
+  line-height: 1.55;
+  margin: 6px 0 0;
+  max-width: 30ch;
 }

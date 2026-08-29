@@ -96,7 +96,16 @@ export default function RangeBar({ price }) {
 
   /* Band widens out of nothing, the knob lands on it, the price arrives last —
      the beat order from playApp() in design/index.html, timings included.
+
+     START is where the band begins in that timeline. playApp() runs the whole app
+     screen as ONE timeline: the verdict word (0–0.6s), its sub (0.25–0.8s), then
+     `.to('#aband', …, '-=.3')` — which lands at 0.5s. Split across components each
+     timeline would otherwise start at zero, and the bar would race the headline it
+     is meant to follow.
+
      Under prefers-reduced-motion the same end state is set in one frame. */
+  const START = 0.5
+
   useGSAP(
     () => {
       if (!bandEl.current) return
@@ -109,7 +118,7 @@ export default function RangeBar({ price }) {
       }
 
       gsap.set(bandEl.current, { width: 0 })
-      const tl = gsap.timeline()
+      const tl = gsap.timeline({ delay: START })
       tl.to(bandEl.current, { width: `${bandPct}%`, duration: 0.9, ease: 'power4.inOut' })
 
       if (knobEl.current) {
