@@ -101,6 +101,7 @@ The first implementation should use a versioned boundary such as `POST /v1/analy
 ## Architectural constraints
 
 - Domain functions are deterministic and have no network access.
+- The DCF package has no route, provider, cache, environment, logging, or presentation dependency.
 - External payloads enter through typed adapters.
 - Provider text and model output are untrusted.
 - API responses include schema versions.

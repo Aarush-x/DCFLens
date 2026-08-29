@@ -4,6 +4,8 @@
 
 DCFLens keeps valuation deterministic, inspectable, and separate from narrative analysis. The same input facts and scenario parameters must always produce the same numeric result. AI may propose a labeled scenario, but it does not own the baseline calculation.
 
+The implemented domain contract, exact units, validation ranges, machine-readable fields, stability rule, and sensitivity construction are specified in [dcf-engine.md](dcf-engine.md).
+
 ## DeltaDCF reference scenario
 
 The initial reference scenario preserves DeltaDCF's published baseline so results can be compared during implementation:
@@ -74,15 +76,11 @@ intrinsic value per share = equity value / diluted shares
 
 The engine must reject non-positive shares and non-finite inputs or results.
 
-## Scenario model
+## Assumption-set model
 
-Every result should include at least:
+The domain engine calculates exactly one final valuation per call from one explicit assumption set. It does not assign bull, base, bear, or other scenario names. Comparing multiple user-authored assumption sets is an orchestration concern outside the domain engine.
 
-- `reference`: the DeltaDCF-compatible baseline assumptions.
-- `user`: optional explicit user assumptions.
-- `ai_proposed`: optional, bounded assumptions inferred from cited filing evidence.
-
-Each scenario contains raw decimal values, formatted display values, provenance, and warnings. The UI must not present `ai_proposed` as the baseline or silently select it.
+The returned sensitivity interval changes assumptions symmetrically around that one valuation. It is explicitly marked as non-probabilistic and must not be displayed as a confidence or probability interval.
 
 ## AI adjustment policy
 
@@ -98,7 +96,7 @@ DCFLens should treat those bounds as a reference requiring product and finance r
 
 ## Sensitivity and warnings
 
-The result should show sensitivity across reviewed growth and discount-rate ranges. It must warn when:
+The result shows sensitivity across explicit growth and discount-rate deltas. It warns when:
 
 - Terminal value forms an unusually large share of enterprise value.
 - The discount rate approaches the terminal growth rate.
