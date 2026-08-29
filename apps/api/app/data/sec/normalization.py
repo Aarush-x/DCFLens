@@ -204,7 +204,11 @@ INTERNAL_METRICS = (
     ),
     _MetricSpec(
         "_short_term_investments",
-        _concepts("us-gaap", "ShortTermInvestments"),
+        _concepts(
+            "us-gaap",
+            "ShortTermInvestments",
+            "MarketableSecuritiesCurrent",
+        ),
         "USD",
         "instant",
     ),

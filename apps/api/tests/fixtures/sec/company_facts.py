@@ -133,6 +133,19 @@ def technology_company() -> SecJsonDocument:
     return _document(320193, us_gaap=us_gaap, dei=dei)
 
 
+def apple_marketable_securities_company() -> SecJsonDocument:
+    accession = "0000320193-25-000079"
+    us_gaap = {
+        "CashAndCashEquivalentsAtCarryingValue": _concept(
+            "USD", _instant(35_934.0, accession=accession)
+        ),
+        "MarketableSecuritiesCurrent": _concept(
+            "USD", _instant(35_228.0, accession=accession)
+        ),
+    }
+    return _document(320193, us_gaap=us_gaap)
+
+
 def retail_company() -> SecJsonDocument:
     accession = "0000104169-25-000001"
     us_gaap = {

@@ -8,6 +8,7 @@ import pytest
 from app.data.sec.errors import SecDataError
 from app.data.sec.normalization import OUTPUT_METRICS, normalize_company_facts
 from tests.fixtures.sec.company_facts import (
+    apple_marketable_securities_company,
     bank_company,
     conflicting_facts_company,
     missing_facts_company,
@@ -15,6 +16,25 @@ from tests.fixtures.sec.company_facts import (
     technology_company,
     utility_company,
 )
+
+
+def test_apple_current_marketable_securities_are_included_with_cash() -> None:
+    result = normalize_company_facts(apple_marketable_securities_company())
+
+    cash = result.latest("cash_and_short_term_investments")
+    assert cash is not None
+    assert cash.value == pytest.approx(71_162.0)
+    assert cash.quality == "calculated"
+    assert {
+        evidence.xbrl_concept for evidence in cash.evidence
+    } == {
+        "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+        "us-gaap:MarketableSecuritiesCurrent",
+    }
+    assert all(
+        evidence.accession_number == "0000320193-25-000079"
+        for evidence in cash.evidence
+    )
 
 
 def test_technology_company_normalizes_all_requested_metrics() -> None:
