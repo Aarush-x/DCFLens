@@ -2,17 +2,18 @@ import { useEffect, useState } from 'react'
 
 /* The only place in the app that loads an analysis. Nothing else may fetch.
  *
- * Today it serves the committed mocks. When 1A.2 lands `src/lib/adapter.js`,
- * flip USE_LIVE_API to true and uncomment the two adapter lines below — the
- * live response is the AnalysisEnvelope, and toView() is what turns it into the
+ * Today it serves the committed mocks. Flip USE_LIVE_API to true to hit the real
+ * backend — the adapter is already wired on both paths. The live response is the
+ * AnalysisEnvelope, and toView() (1A.2) is what turns it into the docs/API.md v2
  * shape components read. No component ever sees the raw envelope.
  */
 
-// import { toView } from './adapter.js'   // ← 1A.2
+import { toView } from './adapter.js'
+
 const USE_LIVE_API = false
 
-/* Lazy glob, so a mock that has not been committed yet (msft-live.json is
-   owned by 1A.2) is simply absent rather than a build error. */
+/* Lazy glob, so a mock that is not committed is simply absent rather than a
+   build error. */
 const FILES = import.meta.glob('../mocks/*.json')
 
 const MOCKS = {
@@ -46,6 +47,13 @@ async function loadMock(name) {
   return mod.default ?? mod
 }
 
+/* The seam (1A.2). msft-live.json is a raw AnalysisEnvelope; aapl.json and
+   xyz-novalue.json are already in docs/API.md v2 shape. Anything envelope-shaped —
+   or an error body — goes through toView, so no component ever sees the raw
+   envelope, whether it arrived over the network or out of a mock. */
+const isEnvelope = (d) => Boolean(d && typeof d === 'object' && (d.analysis || d.error))
+const asView = (d) => (isEnvelope(d) ? toView(d) : d)
+
 /**
  * @param {string|null} ticker  null → whatever ?mock= selects
  * @returns {{ data: object|null, loading: boolean, error: Error|null }}
@@ -64,11 +72,13 @@ export function useAnalysis(ticker) {
         if (USE_LIVE_API && ticker) {
           const res = await fetch(`/api/analyze/${ticker}`)
           const body = await res.json()
-          if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`)
-          // data = toView(body)                                  // ← 1A.2
-          data = body
+          // 4xx is not a crash. "We can't value this" is a designed state, and
+          // toView turns the error body into it (product non-negotiable #3).
+          // A 5xx really is broken, so that still throws.
+          if (res.status >= 500) throw new Error(body?.error?.message || `HTTP ${res.status}`)
+          data = toView(body)
         } else {
-          data = await loadMock(params.mock)
+          data = asView(await loadMock(params.mock))
         }
 
         // Mocks carry no AI status; the envelope does. Default OK, URL wins,

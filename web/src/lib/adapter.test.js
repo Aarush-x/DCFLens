@@ -1,0 +1,525 @@
+/* The one place in this build where "no tests" does not apply.
+ *
+ * adapter.js is the seam between the AnalysisEnvelope and the docs/API.md v2 shape
+ * the components render. A silent mis-map here is a wrong number on a valuation
+ * screen — the failure mode this whole product exists to avoid. So every derived
+ * field is asserted against src/mocks/msft-live.json, a byte-for-byte capture of a
+ * real GET /api/analyze/MSFT.
+ *
+ * Values are asserted against the envelope, not against hard-coded constants, except
+ * where a literal IS the point (the price gap, the enum translations, the 159.66
+ * headline figure quoted in docs/FRONTEND-PROMPTS.md).
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import envelope from '../mocks/msft-live.json'
+import {
+  AI_FALLBACK,
+  NO_PRICE,
+  businessQuality,
+  historicalGrowthPct,
+  toCannotValue,
+  toView,
+} from './adapter.js'
+
+const view = toView(envelope)
+const fv = envelope.analysis.final_valuation
+const si = fv.sensitivity_interval
+const results = envelope.analysis.deterministic_checklist.results
+
+/* ── the price gap: the assertions that matter most ─────────────────────────── */
+
+describe('the price gap (product non-negotiable #3)', () => {
+  it('returns price.current === null, and specifically not 0', () => {
+    expect(view.price.current).toBeNull()
+    expect(view.price.current).not.toBe(0)
+  })
+
+  it('flags price as unavailable rather than leaving consumers to guess', () => {
+    expect(view.priceAvailable).toBe(false)
+    expect(view.price.unavailable_reason).toBe(NO_PRICE)
+  })
+
+  it('refuses a verdict word, because a verdict is price vs value', () => {
+    expect(view.verdict.label).toBeNull()
+    expect(view.verdict.unavailable_reason).toBe(NO_PRICE)
+  })
+
+  it('refuses a margin of safety and a combination string', () => {
+    expect(view.verdict.margin_of_safety_pct).toBeNull()
+    expect(view.verdict.combination).toBeNull()
+  })
+
+  it('refuses an implied growth rate, which is solved against the price', () => {
+    expect(view.what_has_to_be_true.implied_growth_pct).toBeNull()
+    expect(view.what_has_to_be_true.unavailable_reason).toBe(NO_PRICE)
+  })
+
+  it('never emits a numeric zero anywhere a price would sit', () => {
+    for (const v of [
+      view.price.current,
+      view.verdict.margin_of_safety_pct,
+      view.what_has_to_be_true.implied_growth_pct,
+    ]) {
+      expect(v).toBeNull()
+    }
+  })
+})
+
+/* ── the range: what survives the gap ───────────────────────────────────────── */
+
+describe('valuation range', () => {
+  it('maps intrinsic_value_per_share to both value.mid and price.fair_value_mid', () => {
+    expect(view.value.mid).toBe(fv.intrinsic_value_per_share)
+    expect(view.price.fair_value_mid).toBe(fv.intrinsic_value_per_share)
+    expect(view.value.mid).toBeCloseTo(159.66, 2) // the figure quoted in FRONTEND-PROMPTS.md
+  })
+
+  it('maps the sensitivity interval bounds to low and high', () => {
+    expect(view.value.low).toBe(si.lower_bound_per_share)
+    expect(view.value.high).toBe(si.upper_bound_per_share)
+    expect(view.price.fair_value_low).toBe(si.lower_bound_per_share)
+    expect(view.price.fair_value_high).toBe(si.upper_bound_per_share)
+    expect(view.value.low).toBeCloseTo(127.3, 1)
+    expect(view.value.high).toBeCloseTo(212.2, 1)
+  })
+
+  it('is a populated, correctly ordered range', () => {
+    expect(view.value.low).toBeLessThan(view.value.mid)
+    expect(view.value.mid).toBeLessThan(view.value.high)
+  })
+})
+
+/* ── identity, filing, provenance ───────────────────────────────────────────── */
+
+describe('identity and filing', () => {
+  it('maps company_name to both company_name and companyName', () => {
+    expect(view.company_name).toBe('MICROSOFT CORP') // SEC registrant name, verbatim — never re-cased here
+    expect(view.companyName).toBe(envelope.company_name)
+  })
+
+  it('maps ticker', () => {
+    expect(view.ticker).toBe('MSFT')
+  })
+
+  it('maps sec_retrieved_at to retrievedAt, and as_of to its date half', () => {
+    expect(view.retrievedAt).toBe(envelope.sec_retrieved_at)
+    expect(view.as_of).toBe('2026-08-29')
+    expect(view.as_of).toBe(envelope.sec_retrieved_at.slice(0, 10))
+  })
+
+  it('maps every latest_filing field named in the 1A.2 spec', () => {
+    const f = envelope.latest_filing
+    expect(view.filing).toEqual({
+      form: f.filing_form,
+      reportDate: f.report_date,
+      filingDate: f.filing_date,
+      accessionNumber: f.accession_number,
+      url: f.filing_url,
+      cik: f.cik,
+      isAmendment: false,
+    })
+    expect(view.filing.form).toBe('10-K')
+    expect(view.filing.accessionNumber).toBe('0001193125-26-323660')
+  })
+
+  it('cites only sources the service actually used — never Yahoo Finance', () => {
+    expect(view.sources.length).toBeGreaterThan(0)
+    for (const s of view.sources) {
+      expect(s.url).toMatch(/^https:\/\//)
+      expect(s.label.toLowerCase()).not.toContain('yahoo')
+    }
+    expect(view.sources[0].url).toBe(envelope.latest_filing.filing_url)
+  })
+})
+
+/* ── confidence ─────────────────────────────────────────────────────────────── */
+
+describe('confidence', () => {
+  it('maps level, score and explanation, lowercasing the level for the contract', () => {
+    const c = envelope.analysis.confidence
+    expect(view.confidence.level).toBe('low') // engine emits "Low"
+    expect(view.confidence.score).toBe(c.score)
+    expect(view.confidence.explanation).toBe(c.explanation)
+    expect(view.confidence.isProbability).toBe(false)
+  })
+
+  it('mirrors the level onto verdict.confidence, in the contract enum', () => {
+    expect(view.verdict.confidence).toBe('low')
+    expect(['high', 'medium', 'low']).toContain(view.verdict.confidence)
+  })
+
+  it('carries every confidence factor through with a readable label', () => {
+    expect(view.confidence.factors).toHaveLength(envelope.analysis.confidence.factors.length)
+    const coverage = view.confidence.factors.find((f) => f.name === 'data_coverage')
+    expect(coverage.label).toBe('Data coverage')
+    expect(coverage.score).toBeCloseTo(0.925, 3)
+  })
+})
+
+/* ── checks ─────────────────────────────────────────────────────────────────── */
+
+describe('checks', () => {
+  it('maps every checklist result, losing none', () => {
+    expect(view.checks).toHaveLength(results.length)
+    expect(view.checks).toHaveLength(10)
+  })
+
+  it('translates the five engine statuses into the four contract statuses', () => {
+    const by = (n) => view.checks.find((c) => c.number === n)
+    expect(by(1).status).toBe('supports') // SUPPORTS
+    expect(by(5).status).toBe('insufficient') // NOT_APPLICABLE
+    expect(by(9).status).toBe('insufficient') // UNKNOWN
+    for (const c of view.checks) {
+      expect(['supports', 'weakens', 'monitor', 'insufficient']).toContain(c.status)
+    }
+  })
+
+  it('carries sector relevance on its own axis, and never hides a row', () => {
+    const notApplicable = view.checks.filter((c) => c.sector_relevance === 'not_applicable')
+    expect(notApplicable).toHaveLength(1)
+    expect(notApplicable[0].number).toBe(5) // Inventory, N/A for Microsoft
+    expect(view.checks.every((c) => ['applies', 'not_applicable'].includes(c.sector_relevance))).toBe(true)
+  })
+
+  it('keeps jargon off the default label and parks it on technical_label', () => {
+    const gross = view.checks.find((c) => c.number === 1)
+    expect(gross.label).toBe('Keeps a healthy share of every sales dollar')
+    expect(gross.label).not.toMatch(/margin|>|%/i)
+    expect(gross.technical_label).toBe(results[0].checklist_text)
+    expect(gross.technical_explanation).toContain('gross_profit_margin')
+  })
+
+  it('uses the engine plain-English line as the detail', () => {
+    const gross = view.checks.find((c) => c.number === 1)
+    expect(gross.detail).toBe(results[0].plain_english_explanation)
+    expect(gross.detail).toContain('67.9%')
+  })
+
+  it('rewrites scientific notation out of beginner-facing text', () => {
+    const ocf = view.checks.find((c) => c.number === 7)
+    expect(ocf.detail).not.toMatch(/e\+\d/)
+    expect(ocf.detail).toContain('$182.9B') // was "1.82935e+11 USD"
+  })
+
+  it('surfaces what is missing on an UNKNOWN row instead of going silent', () => {
+    const diversity = view.checks.find((c) => c.number === 9)
+    expect(diversity.status).toBe('insufficient')
+    expect(diversity.missing_information.length).toBeGreaterThan(0)
+  })
+})
+
+/* ── evidence ───────────────────────────────────────────────────────────────── */
+
+describe('evidence', () => {
+  it('attaches evidence in the contract shape where the engine has references', () => {
+    const gross = view.checks.find((c) => c.number === 1)
+    expect(gross.evidence).toMatchObject({
+      filing_type: '10-K',
+      fiscal_period: 'FY2026',
+      filed_on: '2026-07-29',
+      provenance: 'xbrl',
+      section: null,
+    })
+    expect(gross.evidence.values_used).toHaveLength(2)
+  })
+
+  it('labels evidence rows from the XBRL concept and keeps the raw value', () => {
+    const gross = view.checks.find((c) => c.number === 1)
+    const [first] = gross.evidence.values_used
+    expect(first.label).toBe('Gross profit')
+    expect(first.value).toBe(225465000000)
+    expect(first.unit).toBe('USD')
+    expect(first.concept).toBe('us-gaap:GrossProfit')
+  })
+
+  it('links to the readable 10-K, never the raw companyfacts JSON', () => {
+    for (const c of view.checks) {
+      if (!c.evidence) continue
+      expect(c.evidence.url).toBe(envelope.latest_filing.filing_url)
+      expect(c.evidence.url).toContain('sec.gov/Archives')
+      expect(c.evidence.url).not.toContain('data.sec.gov')
+      // the raw feed stays available, but as secondary provenance only
+      expect(c.evidence.data_url).toContain('data.sec.gov')
+    }
+  })
+
+  it('returns null evidence — not an empty husk — where the engine has none', () => {
+    const inventory = view.checks.find((c) => c.number === 5)
+    expect(inventory.evidence).toBeNull()
+  })
+
+  it('flattens and de-duplicates every evidence reference by id', () => {
+    expect(view.evidence.length).toBeGreaterThan(0)
+    const ids = view.evidence.map((e) => e.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(view.evidence[0]).toHaveProperty('concept')
+    expect(view.evidence[0]).toHaveProperty('accessionNumber')
+  })
+})
+
+/* ── the math ───────────────────────────────────────────────────────────────── */
+
+describe('the math', () => {
+  it('maps the DCF inputs off final_valuation', () => {
+    expect(view.the_math.starting_free_cash_flow).toBe(fv.inputs.starting_free_cash_flow)
+    expect(view.the_math.net_debt).toBe(fv.inputs.net_debt)
+    expect(view.the_math.shares_outstanding).toBe(fv.inputs.diluted_shares)
+  })
+
+  it('converts decimal-fraction rates to percentages', () => {
+    const a = fv.assumptions
+    expect(view.the_math.stage_1.growth_pct).toBeCloseTo(a.stage_one_growth_rate * 100, 9)
+    expect(view.the_math.stage_1.growth_pct).toBeCloseTo(9.72, 2)
+    expect(view.the_math.stage_2.growth_pct).toBeCloseTo(a.stage_two_growth_rate * 100, 9)
+    expect(view.the_math.terminal_growth_pct).toBeCloseTo(3.0, 6)
+    expect(view.the_math.discount_rate_pct).toBeCloseTo(11.52, 2)
+  })
+
+  it('maps stage lengths', () => {
+    expect(view.the_math.stage_1.years).toBe(5)
+    expect(view.the_math.stage_2.years).toBe(5)
+  })
+
+  it('maps terminal value concentration to terminal_value_pct', () => {
+    expect(view.the_math.terminal_value_pct).toBeCloseTo(fv.terminal_value.concentration * 100, 9)
+    expect(view.the_math.terminal_value_pct).toBeCloseTo(49.5, 1)
+  })
+
+  it('builds scenarios off the sensitivity interval, not off invented numbers', () => {
+    const [pess, real, opt] = view.the_math.scenarios
+    expect(pess.value_per_share).toBe(si.lower_bound_per_share)
+    expect(real.value_per_share).toBe(fv.intrinsic_value_per_share)
+    expect(opt.value_per_share).toBe(si.upper_bound_per_share)
+    // growth is the central rate ∓ the interval's own documented delta
+    const delta = si.growth_rate_delta * 100
+    expect(real.growth_pct - pess.growth_pct).toBeCloseTo(delta, 9)
+    expect(opt.growth_pct - real.growth_pct).toBeCloseTo(delta, 9)
+  })
+
+  it('carries engine warnings rather than swallowing them', () => {
+    expect(view.the_math.warnings).toContain('unstable_historical_free_cash_flow')
+  })
+})
+
+/* ── business quality: the axis that survives a missing price ────────────────── */
+
+describe('business quality', () => {
+  it('resolves for MSFT even though there is no price', () => {
+    expect(view.verdict.business_quality).toBe('strong') // 7 supports of 9 applicable
+    expect(['strong', 'weak', 'uncertain', 'insufficient']).toContain(view.verdict.business_quality)
+  })
+
+  it('ignores not-applicable rows when judging quality', () => {
+    const onlyNa = [{ status: 'NOT_APPLICABLE' }, { status: 'NOT_APPLICABLE' }]
+    expect(businessQuality(onlyNa)).toBe('insufficient')
+  })
+
+  it('reads weak when the checklist mostly weakens', () => {
+    const mostlyWeak = [
+      { status: 'WEAKENS' }, { status: 'WEAKENS' }, { status: 'WEAKENS' },
+      { status: 'WEAKENS' }, { status: 'SUPPORTS' },
+    ]
+    expect(businessQuality(mostlyWeak)).toBe('weak')
+  })
+
+  it('reads insufficient when most applicable rows are unknown', () => {
+    const mostlyUnknown = [
+      { status: 'UNKNOWN' }, { status: 'UNKNOWN' }, { status: 'UNKNOWN' }, { status: 'SUPPORTS' },
+    ]
+    expect(businessQuality(mostlyUnknown)).toBe('insufficient')
+  })
+
+  it('handles an empty or missing checklist', () => {
+    expect(businessQuality([])).toBe('insufficient')
+    expect(businessQuality(undefined)).toBe('insufficient')
+  })
+})
+
+/* ── plain english ──────────────────────────────────────────────────────────── */
+
+describe('plain english cards', () => {
+  it('produces cards even though the AI narrative is unavailable', () => {
+    expect(view.plain_english.length).toBeGreaterThan(0)
+    expect(view.plain_english.length).toBeLessThanOrEqual(3)
+  })
+
+  it('marks them deterministic, so the UI can say where they came from', () => {
+    for (const card of view.plain_english) {
+      expect(card.source).toBe('deterministic')
+    }
+  })
+
+  it('carries a contract-legal sentiment and a plain title', () => {
+    for (const card of view.plain_english) {
+      expect(['positive', 'neutral', 'negative']).toContain(card.sentiment)
+      expect(card.title).toBeTruthy()
+      expect(card.body).toBeTruthy()
+    }
+  })
+
+  it('never builds a card from a not-applicable or unknown row', () => {
+    const titles = view.plain_english.map((c) => c.title)
+    expect(titles).not.toContain('Manages the stock it holds')
+    expect(titles).not.toContain('Sticks to a business you can explain')
+  })
+})
+
+/* ── AI status ──────────────────────────────────────────────────────────────── */
+
+describe('AI status', () => {
+  it('reports the fallback that is the current production state', () => {
+    expect(view.aiStatus).toBe(AI_FALLBACK)
+    expect(view.aiFallbackReason).toBe('provider_failure')
+  })
+
+  it('stays a string, so useAnalysis\'s ?status= override still works', () => {
+    expect(typeof view.aiStatus).toBe('string')
+  })
+
+  it('carries the engine explanation of what was skipped', () => {
+    expect(view.aiDisagreement).toContain('AI qualitative analysis was not applied')
+  })
+
+  it('reports OK when the AI path succeeded', () => {
+    const ok = toView({ ...envelope, analysis: { ...envelope.analysis, status: 'AI_ADJUSTED', fallback_reason: null } })
+    expect(ok.aiStatus).toBe('OK')
+    expect(ok.aiFallbackReason).toBeNull()
+  })
+})
+
+/* ── historical growth ──────────────────────────────────────────────────────── */
+
+describe('historicalGrowthPct', () => {
+  it('computes a CAGR across the filed history', () => {
+    const xs = fv.inputs.historical_free_cash_flows
+    const expected = ((xs.at(-1) / xs[0]) ** (1 / (xs.length - 1)) - 1) * 100
+    expect(view.what_has_to_be_true.historical_growth_pct).toBeCloseTo(expected, 9)
+  })
+
+  it('refuses a CAGR across a sign change rather than returning a fake one', () => {
+    expect(historicalGrowthPct([-100, 50])).toBeNull()
+    expect(historicalGrowthPct([100, -50])).toBeNull()
+  })
+
+  it('refuses on too little data', () => {
+    expect(historicalGrowthPct([100])).toBeNull()
+    expect(historicalGrowthPct([])).toBeNull()
+    expect(historicalGrowthPct(undefined)).toBeNull()
+  })
+})
+
+/* ── the cannot-value path ──────────────────────────────────────────────────── */
+
+describe('cannot-value shape', () => {
+  // The live 404 body, captured 2026-08-30 from GET /api/analyze/ZZZZ
+  const notFound = {
+    error: {
+      code: 'unsupported_ticker',
+      message: 'Ticker ZZZZ is not present in the SEC company mapping',
+      request_id: '887e88aa14074333bd562431c6741f09',
+    },
+  }
+  // The 422 body shape, per app/main.py _service_error_status + errors.py
+  const missingData = {
+    error: {
+      code: 'missing_sec_data',
+      message: 'missing_sec_data: cash_and_short_term_investments',
+      request_id: 'abc123',
+    },
+  }
+
+  it('turns a 404 error body into the cannot-value shape', () => {
+    const v = toView(notFound)
+    expect(v.verdict.label).toBe('CANNOT_VALUE')
+    expect(v.verdict.combination).toBe('Insufficient evidence')
+    expect(v.canValue).toBe(false)
+    expect(v.errorCode).toBe('unsupported_ticker')
+    expect(v.requestId).toBe(notFound.error.request_id)
+  })
+
+  it('turns a 422 error body into the cannot-value shape', () => {
+    const v = toView(missingData)
+    expect(v.verdict.label).toBe('CANNOT_VALUE')
+    expect(v.errorCode).toBe('missing_sec_data')
+    expect(v.verdict.detail).toContain('cash_and_short_term_investments')
+  })
+
+  it('nulls the whole range, and never zeroes it', () => {
+    const v = toView(missingData)
+    expect(v.price).toMatchObject({
+      current: null, fair_value_low: null, fair_value_mid: null, fair_value_high: null,
+    })
+    expect(v.value).toEqual({ low: null, mid: null, high: null })
+  })
+
+  it('matches the docs/API.md cannot-value payload for the nullable sections', () => {
+    const v = toView(missingData)
+    expect(v.what_has_to_be_true).toBeNull()
+    expect(v.the_math).toBeNull()
+    expect(v.falsifiers).toEqual([])
+    expect(v.checks).toEqual([])
+    expect(v.plain_english).toEqual([])
+    expect(v.verdict.business_quality).toBe('insufficient')
+    expect(v.verdict.confidence).toBe('low')
+  })
+
+  it('treats a 200 with no valuation as a refusal, not a crash', () => {
+    const v = toView({ ...envelope, analysis: { ...envelope.analysis, final_valuation: null } })
+    expect(v.verdict.label).toBe('CANNOT_VALUE')
+    expect(v.errorCode).toBe('calculation_error')
+    // identity survives, so the screen can still name the company
+    expect(v.companyName).toBe('MICROSOFT CORP')
+    expect(v.filing.form).toBe('10-K')
+  })
+
+  it('never throws on junk input', () => {
+    for (const junk of [null, undefined, 'nope', 42, []]) {
+      expect(() => toView(junk)).not.toThrow()
+      expect(toView(junk).verdict.label).toBe('CANNOT_VALUE')
+    }
+  })
+
+  it('is directly constructible for a synthetic refusal', () => {
+    expect(toCannotValue().verdict.label).toBe('CANNOT_VALUE')
+  })
+})
+
+/* ── the whole object ───────────────────────────────────────────────────────── */
+
+describe('completeness', () => {
+  it('returns every key the docs/API.md v2 contract names', () => {
+    for (const k of [
+      'ticker', 'company_name', 'currency', 'as_of', 'verdict', 'price',
+      'plain_english', 'what_has_to_be_true', 'falsifiers', 'the_math', 'checks', 'sources',
+    ]) {
+      expect(view).toHaveProperty(k)
+    }
+  })
+
+  it('returns every key the 1A.2 mapping names', () => {
+    for (const k of [
+      'companyName', 'ticker', 'retrievedAt', 'filing', 'value', 'confidence',
+      'checks', 'evidence', 'aiStatus',
+    ]) {
+      expect(view).toHaveProperty(k)
+    }
+  })
+
+  it('leaves no field undefined — missing is null, never absent', () => {
+    const walk = (o, path = '') => {
+      for (const [k, v] of Object.entries(o ?? {})) {
+        expect(v, `${path}${k} is undefined`).not.toBeUndefined()
+        if (v && typeof v === 'object' && !Array.isArray(v)) walk(v, `${path}${k}.`)
+      }
+    }
+    walk(view)
+  })
+
+  it('makes no claim about the price anywhere in the object', () => {
+    const json = JSON.stringify(view)
+    expect(json).not.toContain('"current":0')
+    expect(json).toContain(`"${NO_PRICE}"`)
+  })
+})
