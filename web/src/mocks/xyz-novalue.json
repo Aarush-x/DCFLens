@@ -1,0 +1,47 @@
+{
+  "ticker": "XYZ",
+  "company_name": "Example Biotech Inc.",
+  "currency": "USD",
+  "as_of": "2026-08-29",
+  "verdict": {
+    "label": "CANNOT_VALUE",
+    "headline": "We can't value this company reliably",
+    "confidence": "low",
+    "margin_of_safety_pct": null,
+    "business_quality": "insufficient",
+    "combination": "Insufficient evidence"
+  },
+  "price": {
+    "current": 42.10,
+    "fair_value_low": null,
+    "fair_value_mid": null,
+    "fair_value_high": null
+  },
+  "plain_english": [
+    {
+      "title": "This company isn't making cash yet",
+      "body": "Our method works by looking at the spare cash a business produces. This company currently spends more than it brings in, so there's nothing to project forward. That doesn't mean it's a bad investment — it means this tool can't judge it.",
+      "sentiment": "neutral",
+      "evidence": {
+        "filing_type": "10-K",
+        "fiscal_period": "FY2025",
+        "filed_on": "2026-02-18",
+        "values_used": [
+          { "label": "Operating cash flow", "value": -212400000 },
+          { "label": "Capital expenditure", "value": -38100000 }
+        ],
+        "calculation": "Operating cash flow − capital expenditure",
+        "section": "Consolidated Statements of Cash Flows",
+        "url": "https://www.sec.gov/edgar",
+        "provenance": "xbrl"
+      }
+    }
+  ],
+  "what_has_to_be_true": null,
+  "falsifiers": [],
+  "the_math": null,
+  "checks": [],
+  "sources": [
+    { "label": "Yahoo Finance — price and financials", "url": "https://finance.yahoo.com" }
+  ]
+}

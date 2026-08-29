@@ -1,0 +1,172 @@
+{
+  "ticker": "AAPL",
+  "company_name": "Apple Inc.",
+  "currency": "USD",
+  "as_of": "2026-08-29",
+
+  "verdict": {
+    "label": "FAIRLY_PRICED",
+    "headline": "Apple looks fairly priced right now",
+    "confidence": "medium",
+    "margin_of_safety_pct": 3.7,
+    "business_quality": "strong",
+    "combination": "Strong business, reasonable price"
+  },
+
+  "price": {
+    "current": 178.20,
+    "fair_value_low": 165.00,
+    "fair_value_mid": 184.80,
+    "fair_value_high": 205.00
+  },
+
+  "plain_english": [
+    {
+      "title": "It makes a lot of spare cash",
+      "body": "After paying for everything it needs to run, Apple had about $99 billion left over last year. That leftover cash is what the company is ultimately worth.",
+      "sentiment": "positive",
+      "evidence": {
+        "filing_type": "10-K",
+        "fiscal_period": "FY2025",
+        "filed_on": "2025-11-01",
+        "values_used": [
+          { "label": "Operating cash flow", "value": 118254000000 },
+          { "label": "Capital expenditure", "value": -19254000000 }
+        ],
+        "calculation": "Operating cash flow − capital expenditure",
+        "section": "Consolidated Statements of Cash Flows",
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250927.htm",
+        "provenance": "xbrl"
+      }
+    },
+    {
+      "title": "Most of what it sells, it keeps",
+      "body": "For every dollar of sales, about 45 cents is left after the cost of making the product. That cushion is what lets Apple keep spending on new things without running short.",
+      "sentiment": "positive",
+      "evidence": null
+    },
+    {
+      "title": "Growth has been slowing",
+      "body": "The spare cash grew about 6% a year over the last five years. Today's price assumes it speeds up from here, not slows down further.",
+      "sentiment": "negative",
+      "evidence": null
+    }
+  ],
+
+  "what_has_to_be_true": {
+    "implied_growth_pct": 8.4,
+    "historical_growth_pct": 6.1,
+    "summary": "At $178, buyers are betting Apple grows its spare cash 8.4% a year for the next decade. It has actually managed 6.1% over the last five years."
+  },
+
+  "falsifiers": [
+    { "text": "Services growth slows below the assumed rate" },
+    { "text": "Operating margins decline" },
+    { "text": "Regulatory pressure materially changes App Store economics" }
+  ],
+
+  "the_math": {
+    "starting_free_cash_flow": 99000000000,
+    "stage_1": { "years": 5, "growth_pct": 8.0 },
+    "stage_2": { "years": 5, "growth_pct": 4.0 },
+    "terminal_growth_pct": 2.5,
+    "discount_rate_pct": 9.0,
+    "terminal_value_pct": 68.4,
+    "net_debt": -50000000000,
+    "shares_outstanding": 15200000000,
+    "scenarios": [
+      { "name": "Pessimistic", "value_per_share": 165.00, "growth_pct": 5.0 },
+      { "name": "Realistic",   "value_per_share": 184.80, "growth_pct": 8.0 },
+      { "name": "Optimistic",  "value_per_share": 205.00, "growth_pct": 11.0 }
+    ],
+    "evidence": {
+      "starting_free_cash_flow": {
+        "filing_type": "10-K",
+        "fiscal_period": "FY2025",
+        "filed_on": "2025-11-01",
+        "values_used": [
+          { "label": "Operating cash flow", "value": 118254000000 },
+          { "label": "Capital expenditure", "value": -19254000000 }
+        ],
+        "calculation": "Operating cash flow − capital expenditure",
+        "section": "Consolidated Statements of Cash Flows",
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250927.htm",
+        "provenance": "xbrl"
+      },
+      "net_debt": {
+        "filing_type": "10-K",
+        "fiscal_period": "FY2025",
+        "filed_on": "2025-11-01",
+        "values_used": [
+          { "label": "Total debt", "value": 98000000000 },
+          { "label": "Cash and marketable securities", "value": 148000000000 }
+        ],
+        "calculation": "Total debt − cash and marketable securities",
+        "section": "Consolidated Balance Sheets",
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250927.htm",
+        "provenance": "xbrl"
+      },
+      "shares_outstanding": null,
+      "discount_rate_pct": null,
+      "terminal_growth_pct": null,
+      "terminal_value_pct": null
+    }
+  },
+
+  "checks": [
+    {
+      "label": "Keeps a healthy share of every sales dollar",
+      "detail": "Gross margin 45%",
+      "status": "supports",
+      "sector_relevance": "applies",
+      "evidence": {
+        "filing_type": "10-K",
+        "fiscal_period": "FY2025",
+        "filed_on": "2025-11-01",
+        "values_used": [
+          { "label": "Net sales", "value": 416161000000 },
+          { "label": "Cost of sales", "value": -228855000000 }
+        ],
+        "calculation": "(Net sales − cost of sales) ÷ net sales",
+        "section": "Consolidated Statements of Operations",
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250927.htm",
+        "provenance": "xbrl"
+      }
+    },
+    {
+      "label": "Turns profit into actual cash",
+      "detail": "Operating cash flow exceeds net income in each of the last five years",
+      "status": "supports",
+      "sector_relevance": "applies",
+      "evidence": null
+    },
+    {
+      "label": "Management flagged a material risk",
+      "detail": "Regulatory pressure on App Store economics named as a risk factor",
+      "status": "monitor",
+      "sector_relevance": "applies",
+      "evidence": {
+        "filing_type": "10-K",
+        "fiscal_period": "FY2025",
+        "filed_on": "2025-11-01",
+        "values_used": [],
+        "calculation": null,
+        "section": "Item 1A. Risk Factors",
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250927.htm",
+        "provenance": "text"
+      }
+    },
+    {
+      "label": "Holds inventory efficiently",
+      "detail": "Inventory is not a meaningful input for this business type",
+      "status": "insufficient",
+      "sector_relevance": "not_applicable",
+      "evidence": null
+    }
+  ],
+
+  "sources": [
+    { "label": "SEC EDGAR — Apple 10-K (FY2025)", "url": "https://www.sec.gov/edgar" },
+    { "label": "Yahoo Finance — price and financials", "url": "https://finance.yahoo.com" }
+  ]
+}
