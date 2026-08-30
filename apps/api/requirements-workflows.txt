@@ -1,0 +1,3 @@
+-r requirements.txt
+# Workflow-only dependency; not installed in the FastAPI web-service image.
+render==1.0.1
