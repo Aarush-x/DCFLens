@@ -65,6 +65,41 @@ An invalid response is not partially trusted. The result uses `DETERMINISTIC_FAL
 - Timeouts and maximum prompt/output sizes are enforced.
 - Provider responses are never logged verbatim in production.
 
+### Bounded Gemini recovery
+
+The REST adapter tries the configured `GEMINI_MODEL`, then the reviewed
+`gemini-2.5-flash` fallback if the primary model fails with a retryable
+availability, rate-limit, model-selection, or request error, or malformed JSON.
+If the configured model is already `gemini-2.5-flash`, it is not tried twice.
+Model switches are logged; no local AI provider is introduced.
+
+- HTTP 429, 500, 502, and 503 permit at most two delayed retries per model.
+  Delays are 1 then 2 seconds, each with 0–0.25 seconds of jitter. Schema-mode
+  changes do not reset this retry counter.
+- All attempts share an eight-request ceiling and a scheduling deadline of
+  `min(60 seconds, 2 × GEMINI_TIMEOUT_SECONDS)`. Each network attempt's timeout
+  is capped by the remaining budget; no further attempt or backoff is scheduled
+  once that budget expires. The standard-library socket timeout is an I/O
+  timeout, not a hard cancellation of a slowly streaming response.
+- Authentication failures and socket timeouts are not retried or sent to a
+  fallback model. If both models remain overloaded, the API returns the unchanged
+  deterministic valuation with `provider_unavailable`.
+- The existing single HTTP-400 schema compatibility attempt keeps JSON MIME
+  mode and places the complete application-owned schema in the **system
+  instruction**. It does not mix schema instructions with untrusted evidence or
+  mutate the original request. All exact-field, finite-number, adjustment-bound,
+  checklist, and evidence-ID checks still run in Python.
+- `gemini_transient_retry_scheduled` records only the model, HTTP status, retry
+  and attempt numbers, and delay. Model fallback events identify the failed and
+  next model. Never log API keys, prompts, evidence text, or generated text.
+  `gemini_fallback_model_succeeded` means parseable JSON was received; only an
+  analysis status of `APPLIED` confirms that subsequent domain validation passed.
+
+Tests simulate temporary/persistent overload, authentication failures, exhausted
+attempt/deadline budgets, schema rejection followed by overload, and valid versus
+fabricated citations after recovery. They do not certify current Google capacity
+or account quota. Paid API usage does not guarantee elimination of HTTP 503s.
+
 DeltaDCF's use of the Google Gen AI client, timeout configuration, structured JSON request, provider-specific errors, and validation bounds are reusable patterns. Its code-embedded model name and model-owned valuation offsets should be redesigned.
 
 ## Claim status
