@@ -23,6 +23,15 @@ import { useEffect, useRef, useState } from 'react'
  *
  * The bar is asymptotic rather than linear for the same reason: it approaches but
  * never reaches full, because we do not know when full is.
+ *
+ * ── Escalation ───────────────────────────────────────────────────────────────
+ * The footnote grows in tiers as the wait does — nothing, then the sleeping
+ * service, then an admission that this one is slow. Tiers are only ever ADDED.
+ * Copy that appears and then vanishes is worse than copy that never appeared: the
+ * reader is left unsure whether they misread it. There is no spinner theatre and
+ * no fake progress beyond the honest asymptote; under prefers-reduced-motion the
+ * pulse and the bar's slide are dropped in app.css and the beats still advance,
+ * because the wait is information and only its decoration was motion.
  */
 
 /* Ordered as the service works: resolve the ticker against the SEC company index,
@@ -34,9 +43,32 @@ const STEPS = [
   { at: 16, text: () => "Estimating what that's worth today" },
 ]
 
-/* When we start admitting the machine was asleep. Under this, saying so is noise;
-   over it, the user has waited long enough to deserve the reason. */
-const COLD_START_AFTER = 8
+/* The two moments this screen has something more to say. Both are clocks, like the
+   steps, and both only ever move forward — `elapsed` is measured against a fixed
+   start, so a line that has appeared never disappears again.
+
+   Four seconds is where a wait stops reading as "the page is working" and starts
+   reading as "the page is stuck". That is when the reason is owed: the machine was
+   asleep. Saying it any earlier is noise on a request that was about to land.
+
+   Twenty is well past the measured cold start (~21s, and the analysis follows it),
+   so a wait that reaches it really is unusual and is worth naming rather than
+   leaving the reader to decide on their own that we have hung. */
+export const COLD_START_AFTER = 4
+export const LONGER_THAN_USUAL_AFTER = 20
+
+/** Which footnotes are owed at `elapsed` seconds, in the order they appeared.
+ *
+ *  Pulled out of the component as a pure function so the one rule that matters
+ *  can be tested without a DOM: the list only ever GROWS. Copy that appears and
+ *  then vanishes leaves the reader unsure whether they misread it, and a wait is
+ *  the worst moment to introduce that doubt. */
+export function footnotesAt(elapsed) {
+  const notes = []
+  if (elapsed >= COLD_START_AFTER) notes.push('coldStart')
+  if (elapsed >= LONGER_THAN_USUAL_AFTER) notes.push('longerThanUsual')
+  return notes
+}
 
 /* Approaches 1 without arriving. At 14s ≈ 63%, at 30s ≈ 88%, capped at 94% so the
    bar never sits full while we are still waiting. */
@@ -64,7 +96,9 @@ export default function LoadingNarration({ ticker, name }) {
   const eyebrow = [name && name !== ticker ? name : null, ticker].filter(Boolean).join(' · ')
 
   const current = STEPS.reduce((acc, s, i) => (elapsed >= s.at ? i : acc), 0)
-  const cold = elapsed >= COLD_START_AFTER
+  const notes = footnotesAt(elapsed)
+  const cold = notes.includes('coldStart')
+  const slow = notes.includes('longerThanUsual')
 
   return (
     <section className="load" data-state="loading" aria-live="polite" aria-busy="true">
@@ -85,17 +119,26 @@ export default function LoadingNarration({ ticker, name }) {
         </div>
       ))}
 
+      {/* Three tiers, each one quieter than the last, and each one only added —
+          never swapped in, never taken away. A line that has been read once should
+          still be there when the reader looks back at it. */}
       <p className="foot">
         This usually takes under a minute. You can leave the page open.
+
         {cold && (
-          <>
-            {' '}
-            <span className="coldstart">
-              Our analysis service goes to sleep when nobody is using it, so the
-              first look-up after a quiet spell spends about half a minute waking
-              up before it reads anything.
-            </span>
-          </>
+          <span className="coldstart">
+            Our analysis service goes to sleep when nobody is using it, so the
+            first look-up after a quiet spell spends about half a minute waking
+            up before it reads anything.
+          </span>
+        )}
+
+        {slow && (
+          <span className="coldstart">
+            This one is taking longer than usual. Nothing has gone wrong that we
+            know of — we are still waiting on it, and the answer will appear here
+            the moment it arrives.
+          </span>
         )}
       </p>
     </section>

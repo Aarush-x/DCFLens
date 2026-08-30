@@ -78,7 +78,8 @@
 @keyframes bl { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
 .load .foot { margin-top: 44px; font-size: 13.5px; color: var(--faint); line-height: 1.6 }
-/* Arrives ~8s in, once the wait is long enough to owe an explanation. */
+/* Added at 4s (the sleeping service) and again at 20s (longer than usual). Both
+   are appended, never swapped, so two can stand at once. */
 .load .coldstart { display: block; margin-top: 10px }
 
 /* A wait is information, not decoration: the beats still advance under reduced
