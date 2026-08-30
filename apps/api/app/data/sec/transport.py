@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import socket
 import urllib.error
 import urllib.request
+from http.client import HTTPException
 from dataclasses import dataclass
 from typing import Mapping, Protocol
 
@@ -46,24 +46,22 @@ class UrllibSecTransport:
     ) -> HttpResponse:
         request = urllib.request.Request(url=url, headers=dict(headers), method="GET")
         try:
-            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-                response_headers = dict(response.headers.items())
-                body = self._bounded_read(response, response_headers, max_response_bytes)
-                return HttpResponse(
-                    status_code=response.status,
-                    headers=response_headers,
-                    body=body,
-                )
-        except urllib.error.HTTPError as exc:
-            response_headers = dict(exc.headers.items()) if exc.headers else {}
-            body = self._bounded_read(exc, response_headers, max_response_bytes)
-            return HttpResponse(
-                status_code=exc.code,
-                headers=response_headers,
-                body=body,
-            )
-        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
-            raise TransportFailure(str(exc.reason if hasattr(exc, "reason") else exc)) from exc
+            try:
+                with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+                    response_headers = dict(response.headers.items())
+                    body = self._bounded_read(response, response_headers, max_response_bytes)
+                    return HttpResponse(response.status, response_headers, body)
+            except urllib.error.HTTPError as exc:
+                try:
+                    response_headers = dict(exc.headers.items()) if exc.headers else {}
+                    body = self._bounded_read(exc, response_headers, max_response_bytes)
+                    return HttpResponse(exc.code, response_headers, body)
+                finally:
+                    exc.close()
+        except (OSError, HTTPException) as exc:
+            # Includes reset/truncated response bodies and errors while reading
+            # an HTTP error response, not just failures opening the connection.
+            raise TransportFailure("SEC transport failed") from exc
 
     @staticmethod
     def _bounded_read(

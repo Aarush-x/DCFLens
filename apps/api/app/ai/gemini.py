@@ -7,6 +7,7 @@ import re
 import socket
 import time
 from dataclasses import dataclass
+from http.client import HTTPException
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -341,18 +342,41 @@ class GeminiClient:
                 "Gemini request failed",
                 fallback_reason="provider_unavailable",
             ) from exc
+        except HTTPException as exc:
+            self._log_failure("provider_unavailable", model=model)
+            raise GeminiProviderError(
+                "Gemini response was interrupted", fallback_reason="provider_unavailable"
+            ) from exc
 
         if len(payload_bytes) > self._config.max_response_bytes:
+            self._log_failure("provider_response_too_large", model=model)
             raise GeminiProviderError("Gemini response exceeded the configured size limit")
         try:
             payload = json.loads(payload_bytes)
             candidate = payload["candidates"][0]
-            text = candidate["content"]["parts"][0]["text"]
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            parts = candidate["content"]["parts"]
+            if not isinstance(candidate, dict) or not isinstance(parts, list):
+                raise TypeError("Invalid content shape")
+            texts = []
+            for part in parts:
+                if not isinstance(part, dict):
+                    raise TypeError("Invalid part shape")
+                if part.get("thought") is True:
+                    continue
+                if "text" in part:
+                    if not isinstance(part["text"], str):
+                        raise TypeError("Invalid text shape")
+                    texts.append(part["text"])
+            text = "".join(texts)
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            self._log_failure("provider_invalid_response", model=model)
             raise GeminiProviderError("Gemini returned an invalid response envelope") from exc
         if not isinstance(text, str) or not text.strip():
+            self._log_failure("provider_empty_response", model=model)
             raise GeminiProviderError("Gemini returned no structured response text")
         usage = payload.get("usageMetadata", {})
+        if not isinstance(usage, dict):
+            usage = {}
         return _GeminiOutput(
             text=text,
             finish_reason=_safe_provider_token(candidate.get("finishReason")),
@@ -418,7 +442,7 @@ def _provider_error_details(
                     if reason:
                         break
         return status, reason, message
-    except (AttributeError, json.JSONDecodeError, OSError, TypeError, ValueError):
+    except (AttributeError, json.JSONDecodeError, OSError, HTTPException, TypeError, ValueError):
         return None, None, None
 
 

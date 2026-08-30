@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Protocol
 
 from app.ai.gemini import GeminiClient, GeminiClientConfig, GeminiProviderError
@@ -211,11 +211,27 @@ def normalize_ticker(raw_ticker: str) -> str:
 def _build_analysis_input(company: CompanyData) -> AiAnalysisInput:
     normalized = company.normalized
     latest_fcf = normalized.latest("free_cash_flow")
-    debt = normalized.latest("total_debt")
-    cash = normalized.latest("cash_and_short_term_investments")
-    shares = normalized.latest("diluted_average_shares") or normalized.latest(
-        "current_shares_outstanding"
-    )
+    if latest_fcf is None:
+        raise MissingSecDataError("Required SEC valuation facts are missing: free_cash_flow")
+
+    def annual_fact(metric: str, *, duration: bool = False):
+        return next((
+            fact for fact in normalized.facts.get(metric, ())
+            if fact.period_end == latest_fcf.period_end
+            and (not duration or fact.period_start == latest_fcf.period_start)
+        ), None)
+
+    debt = annual_fact("total_debt")
+    cash = annual_fact("cash_and_short_term_investments")
+    shares = annual_fact("diluted_average_shares", duration=True)
+    if shares is None:
+        # Cover-page shares may be dated after fiscal year-end. Accept only
+        # observations from the associated annual filing window, not old years.
+        fcf_end = date.fromisoformat(latest_fcf.period_end)
+        shares = next((
+            fact for fact in normalized.facts.get("current_shares_outstanding", ())
+            if 0 <= (date.fromisoformat(fact.period_end) - fcf_end).days <= 120
+        ), None)
     missing: list[str] = []
     for name, fact in (
         ("free_cash_flow", latest_fcf),
@@ -227,7 +243,8 @@ def _build_analysis_input(company: CompanyData) -> AiAnalysisInput:
             missing.append(name)
     if missing:
         raise MissingSecDataError(
-            "Required SEC valuation facts are missing: " + ", ".join(missing)
+            f"Required SEC valuation facts are missing for {latest_fcf.period_end}: "
+            + ", ".join(missing)
         )
     assert latest_fcf is not None and debt is not None and cash is not None and shares is not None
     if shares.value <= 0:
@@ -267,7 +284,10 @@ def _build_analysis_input(company: CompanyData) -> AiAnalysisInput:
             net_debt=debt.value - cash.value,
             diluted_shares=shares.value,
             currency=latest_fcf.unit,
-            historical_free_cash_flows=historical_fcf,
+            # The DCF stability statistic needs two observations. Keep the one
+            # real annual fact in normalized evidence/adaptive coverage, but do
+            # not invent history or prevent a prior-backed current valuation.
+            historical_free_cash_flows=historical_fcf if len(historical_fcf) >= 2 else (),
         ),
         sensitivity=SensitivityConfig(
             growth_rate_delta=0.01,

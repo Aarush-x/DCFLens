@@ -56,6 +56,12 @@ class SecClientConfig:
         if not isinstance(self.user_agent, str):
             raise SecConfigurationError("user_agent must be a string")
         identity = self.user_agent.strip()
+        if any(ord(character) < 32 or ord(character) == 127 for character in identity):
+            raise SecConfigurationError("user_agent must not contain control characters")
+        try:
+            identity.encode("latin-1")
+        except UnicodeEncodeError as exc:
+            raise SecConfigurationError("user_agent must be HTTP header encodable") from exc
         email_match = EMAIL_PATTERN.search(identity)
         app_identity = identity[: email_match.start()].strip() if email_match else ""
         if not email_match or len(app_identity) < 2:

@@ -376,6 +376,8 @@ def _growth_signal(
 
     elapsed_years = max(1, latest.fiscal_year - first.fiscal_year)
     raw_growth = (latest.value / first.value) ** (1.0 / elapsed_years) - 1.0
+    if not math.isfinite(raw_growth):
+        raise AdaptiveBaselineError("Historical growth exceeds the finite numeric range")
     bounded, bound = _apply_bound(f"{name}_cap", raw_growth, bounds)
     return _GrowthSignal(
         RawObservation(
@@ -410,9 +412,13 @@ def _stability(facts: tuple[NormalizedFact, ...]) -> _Stability:
             ),
         )
     values = tuple(fact.value for fact in facts)
-    mean_absolute = sum(abs(value) for value in values) / len(values)
-    normalized_range = 0.0 if mean_absolute == 0 else (max(values) - min(values)) / mean_absolute
-    sign_changes = sum(1 for left, right in zip(values, values[1:]) if left * right < 0)
+    scale = max(abs(value) for value in values)
+    scaled_mean = sum(abs(value) / scale for value in values) / len(values) if scale else 0.0
+    normalized_range = (max(values) / scale - min(values) / scale) / scaled_mean if scale else 0.0
+    sign_changes = sum(
+        1 for left, right in zip(values, values[1:])
+        if (left < 0 < right) or (right < 0 < left)
+    )
     confidence = _clamp(1.0 / (1.0 + normalized_range) - 0.15 * sign_changes, 0.0, 1.0)
     return _Stability(
         confidence,
