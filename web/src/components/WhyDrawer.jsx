@@ -4,6 +4,9 @@ import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { money, percent, count, EMPTY } from '../lib/format.js'
 import ViewEvidence from './ViewEvidence.jsx'
+import EvidenceAudit from './EvidenceAudit.jsx'
+import TerminalValueShare from './TerminalValueShare.jsx'
+import SensitivityMatrix from './SensitivityMatrix.jsx'
 import './WhyDrawer.css'
 
 /* "Why? Show me the math" — the second layer, ported from the `.why` / `.whybody` /
@@ -92,11 +95,17 @@ function rowsFor(math) {
 
 /**
  * @param {object}      props
- * @param {object|null} props.math  `the_math` from the adapter. Null on the
- *                                  cannot-value payload — there is no maths to show,
- *                                  so the trigger does not appear at all.
+ * @param {object|null} props.math    `the_math` from the adapter. Null on the
+ *                                    cannot-value payload — there is no maths to
+ *                                    show, so the trigger does not appear at all.
+ * @param {Array}       props.checks  `checks` from the adapter, for the audit
+ *                                    section. Empty on the cannot-value payload.
+ * @param {number|null} props.price   today's share price, passed through to the
+ *                                    matrix — the only block in here that compares
+ *                                    a figure against it. Null is the live state,
+ *                                    not an oversight; see adapter.js NO_PRICE.
  */
-export default function WhyDrawer({ math }) {
+export default function WhyDrawer({ math, checks, price = null }) {
   const [open, setOpen] = useState(false) // collapsed by default
   const body = useRef(null)
   const chevron = useRef(null)
@@ -163,6 +172,24 @@ export default function WhyDrawer({ math }) {
               <span className={row.value === EMPTY ? 'v missing' : 'v'}>{row.value}</span>
             </div>
           ))}
+
+          {/* The checklist, item by item. It sits between the inputs and the
+              reading of them because it is the gentlest thing in this drawer —
+              sentences about the business, where the rows above are figures and
+              the block below is a share of a number. Renders nothing when the
+              payload carries no checks. */}
+          <EvidenceAudit checks={checks} />
+
+          {/* The rows above are the inputs; this is what the inputs produced, and
+              how much of it rests on the one assumption none of them show. It sits
+              last because it is a reading of the maths, not another input. */}
+          <TerminalValueShare math={math} />
+
+          {/* Last, and deliberately: it is the densest block in the product, and it
+              only means anything once the rows above have said what the assumptions
+              are. Non-negotiable #1 is why it lives behind this drawer and nowhere
+              near the default screen. */}
+          <SensitivityMatrix math={math} price={price} />
         </div>
       </div>
     </div>

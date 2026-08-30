@@ -237,7 +237,7 @@ function Analysis({ data }) {
             <AiFallbackNotice data={data} />
             <PlainEnglish items={data.plain_english} data={data} />
             {/* The second layer. The ONLY place jargon is allowed, and only glossed. */}
-            <WhyDrawer math={data.the_math} />
+            <WhyDrawer math={data.the_math} checks={data.checks} price={data.price?.current ?? null} />
           </div>
           <TheNumbers data={data} />
         </div>
