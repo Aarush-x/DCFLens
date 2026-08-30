@@ -3,6 +3,16 @@
   "company_name": "Apple Inc.",
   "currency": "USD",
   "as_of": "2026-08-29",
+  "retrievedAt": "2026-08-29T19:50:00Z",
+  "filing": {
+    "form": "10-K",
+    "reportDate": "2025-09-27",
+    "filingDate": "2025-10-31",
+    "accessionNumber": "0000320193-25-000079",
+    "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm",
+    "cik": "0000320193",
+    "isAmendment": false
+  },
   "verdict": {
     "label": "FAIRLY_PRICED",
     "headline": "Apple looks fairly priced right now",

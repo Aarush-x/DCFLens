@@ -40,18 +40,6 @@
   font-size: 13.5px; color: var(--dim); font-style: italic;
 }
 
-/* Citations are on the DEFAULT screen, so they obey non-negotiable #1: no jargon.
-   The XBRL concept (us-gaap:NetCashProvidedByUsedInOperatingActivities) is the
-   right identifier for the Why layer and the wrong words for a beginner. Here we
-   name the document and the section of it in plain English. */
-.plain-english .cite { margin-top: 11px; font-size: 12.5px }
-.plain-english .cite a {
-  color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--hair2);
-  padding-bottom: 1px; transition: color .16s, border-color .16s;
-}
-.plain-english .cite a:hover { color: var(--cream); border-color: var(--faint) }
-.plain-english .cite.none { color: var(--dim); font-style: italic }
-
 /* ── the AI-unavailable note ──
    Moved out of the page flow (it was a full-width .box between the range bar and
    the panes) and onto the heading of the section it is actually about. A hairline

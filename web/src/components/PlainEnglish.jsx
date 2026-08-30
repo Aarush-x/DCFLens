@@ -1,6 +1,5 @@
 import Label from './ui/Label.jsx'
-import ViewEvidence from './ViewEvidence.jsx'
-import { percent, cleanName } from '../lib/format.js'
+import { percent } from '../lib/format.js'
 import './PlainEnglish.css'
 
 /* The left pane's narrative column — the "Why we think so" block from the app
@@ -17,10 +16,23 @@ import './PlainEnglish.css'
  * notice, and today it is the normal state: the API falls back to the deterministic
  * checklist on every call, which yields supports and weakens but no falsifiers.
  *
- * ── Every claim carries its source ───────────────────────────────────────────
- * `.cite` under each card, in plain English ("Apple's 2025 annual report · Cash
- * flow statement ↗"), and an explicit "No filing cited for this statement." where
- * the adapter handed us no evidence. Nothing is invented to fill either.
+ * ── One source record, not a citation under every claim ──────────────────
+ * Until 2026-08-30 every card carried its own `.cite` line — "Apple’s 2025 annual
+ * report ↗" under one claim, "No filing cited for this statement." under the next —
+ * beside a "View evidence" trigger. Across four blocks that is the same document
+ * named five times down a single column, and the repetition read as clutter rather
+ * than as proof. The "no filing cited" line was worse: it drew the eye to an
+ * absence under our own assumptions, where there was never a filing to cite.
+ *
+ * Provenance is stated ONCE now, at the foot of the screen, by SourceRecord — the
+ * exact document, its accession number, when we read it, and a link to it. That is
+ * a stronger claim than the per-card links made, because it covers every figure on
+ * the page instead of one sentence at a time.
+ *
+ * The per-claim audit trail did not go away, it moved. ViewEvidence still opens the
+ * drawer from the "Why? Show me the math" layer and from the evidence audit, which
+ * is where tagged XBRL concepts and arithmetic belong (non-negotiable #1 — the
+ * default screen stays free of that vocabulary).
  */
 
 /* Sentiment → pip colour, exactly as design/index.html sets it inline. An item with
@@ -34,69 +46,7 @@ const PIP = {
 
 const pipColour = (sentiment) => PIP[sentiment] ?? 'var(--faint)'
 
-/* 10-K → "annual report". The citation is on the default screen, so the form
-   number — which is what a filing is actually called — is the jargon we translate
-   away. Anything unrecognised keeps its own name rather than being guessed at. */
-const FORM_NAMES = {
-  '10-K': 'annual report',
-  '10-K/A': 'amended annual report',
-  '10-Q': 'quarterly report',
-  '20-F': 'annual report',
-  '8-K': 'current report',
-}
-
-/** "Apple Inc." → "Apple", "MICROSOFT CORP" → "Microsoft". The SEC registrant name
- *  is a legal string, and it arrives in caps — mid-sentence, inside a citation, it
- *  reads as shouting a form field. Only fully-uppercase names are recased, so
- *  "eBay" and "NVIDIA Corp" keep whatever casing the filer actually uses. */
-function shortName(name) {
-  if (typeof name !== 'string' || !name.trim()) return null
-  const bare = (cleanName(name) ?? '')
-    .replace(/[,.]?\s+(inc|incorporated|corp|corporation|co|company|plc|ltd|limited|holdings|group)\.?$/i, '')
-    .trim()
-  if (!bare) return null
-  if (/[a-z]/.test(bare)) return bare
-  return bare.replace(/[A-Z][A-Z']*/g, (w) => w.charAt(0) + w.slice(1).toLowerCase())
-}
-
-/** The year the filing covers, off the fiscal period ("FY2025") or the filing date. */
-function citeYear(evidence) {
-  const fy = /(\d{4})/.exec(evidence.fiscal_period ?? '')
-  if (fy) return fy[1]
-  const filed = /^(\d{4})-/.exec(evidence.filed_on ?? '')
-  return filed ? filed[1] : null
-}
-
-/**
- * "Apple's 2025 annual report · Cash flow statement ↗" — the mockup's own format.
- * Each part is dropped when we don't have it rather than filled in.
- */
-function citeText(evidence, companyName) {
-  const who = shortName(companyName)
-  const year = citeYear(evidence)
-  const form = FORM_NAMES[evidence.filing_type] ?? evidence.filing_type ?? 'filing'
-
-  const doc = [who ? `${who}’s` : null, year, form].filter(Boolean).join(' ')
-  return [doc || 'SEC filing', evidence.section].filter(Boolean).join(' · ')
-}
-
-/** The `.cite` line under a claim. A claim with no filing behind it says so —
- *  that is the mockup's `.cite.none`, and it is load-bearing, not a placeholder. */
-function Cite({ evidence, companyName }) {
-  const url = evidence?.url
-  if (!evidence || typeof url !== 'string' || !url) {
-    return <div className="cite none">No filing cited for this statement.</div>
-  }
-  return (
-    <div className="cite">
-      <a href={url} target="_blank" rel="noreferrer">
-        {citeText(evidence, companyName)} &#8599;
-      </a>
-    </div>
-  )
-}
-
-function Claim({ item, companyName }) {
+function Claim({ item }) {
   return (
     <article className="pe">
       <h3>
@@ -104,15 +54,6 @@ function Claim({ item, companyName }) {
         {item.title}
       </h3>
       {item.body ? <p>{item.body}</p> : null}
-      {/* The citation names the document; the trigger opens what was actually read
-          out of it — the tagged figures, the arithmetic, and whether the number was
-          machine-readable or lifted out of prose. Both, or neither: a claim with no
-          evidence renders the "No filing cited" line alone, because ViewEvidence
-          returns null rather than a dead control. */}
-      <div className="citerow">
-        <Cite evidence={item.evidence} companyName={companyName} />
-        <ViewEvidence evidence={item.evidence} claim={item.title} />
-      </div>
     </article>
   )
 }
@@ -120,16 +61,14 @@ function Claim({ item, companyName }) {
 /* `av` carries no styles of its own — it is the mockup's hook for the app screen's
    entrance timeline (`gsap.to('#app .av', …)`), which AppScreen owns. The mockup
    marks the BLOCKS, not the cards, so the four blocks stagger in as units. */
-function Block({ heading, hint, items, empty, companyName }) {
+function Block({ heading, hint, items, empty }) {
   return (
     <div className="blk av">
       <span className="blkh">{heading}</span>
       <p className="hint">{hint}</p>
       {items.length === 0
         ? <p className="empty">{empty}</p>
-        : items.map((item, i) => (
-            <Claim key={item.title ?? i} item={item} companyName={companyName} />
-          ))}
+        : items.map((item, i) => <Claim key={item.title ?? i} item={item} />)}
     </div>
   )
 }
@@ -142,9 +81,11 @@ function Block({ heading, hint, items, empty, companyName }) {
  * it. Every figure is read straight off the payload; the sentence around it is
  * the mockup's own wording with the number substituted in.
  *
- * These deliberately carry NO citation. They are our assumptions, not the filing's
- * — citing a document for a claim it does not make would be worse than the honest
- * "No filing cited for this statement." that Cite renders instead.
+ * These carry no evidence object, and never did. They are our assumptions, not
+ * the filing's, and citing a document for a claim it does not make would be a
+ * misattribution — which is one reason the screen no longer promises a source
+ * under every card. `evidence: null` is still set explicitly, so the field reads
+ * as a stated absence rather than an oversight.
  *
  * `what_has_to_be_true.summary` is NOT used here. It is a sentence about what
  * today's buyers are betting, which is what the mockup puts in the right column's
@@ -247,8 +188,6 @@ function partition(items, data) {
  *                              do not live on `plain_english`.
  */
 export default function PlainEnglish({ items, data }) {
-  const companyName = data?.company_name ?? data?.companyName ?? null
-
   /* A refusal gets a different column, and this is the mockup's, not a variant of
      ours: design/app.html's #s-novalue heads it "What happened" and lists flat `.pe`
      cards. The four blocks are an argument ABOUT an estimate — running them here
@@ -264,7 +203,7 @@ export default function PlainEnglish({ items, data }) {
           : cards.map((item, i) => (
               /* --faint pips throughout: design/app.html colours every cannot-value
                  card that way, because none of them is a verdict about the company. */
-              <Claim key={item.title ?? i} item={{ ...item, sentiment: null }} companyName={companyName} />
+              <Claim key={item.title ?? i} item={{ ...item, sentiment: null }} />
             ))}
       </section>
     )
@@ -281,28 +220,24 @@ export default function PlainEnglish({ items, data }) {
         hint="The estimate assumes all of these. If one fails, the number is wrong."
         items={mustBeTrue}
         empty="We haven’t written up what this estimate assumes."
-        companyName={companyName}
       />
       <Block
         heading="What supports the estimate"
         hint="Things in the filings that make the estimate more believable."
         items={supports}
         empty="Nothing in the filings we read argues for this estimate."
-        companyName={companyName}
       />
       <Block
         heading="What weakens the estimate"
         hint="Things in the filings that cut the other way."
         items={weakens}
         empty="Nothing in the filings we read argues against this estimate."
-        companyName={companyName}
       />
       <Block
         heading="What could prove it wrong"
         hint="Specific things to watch for. If you see one, come back and redo this."
         items={proveWrong}
         empty="We haven’t written this part up. Nothing has been guessed to fill it."
-        companyName={companyName}
       />
     </section>
   )

@@ -1,7 +1,11 @@
 /* The evidence trigger. Borrowed wholesale from `.cite a` in design/index.html —
-   same colour, same hairline, same 160ms — because it sits on the same line as a
-   citation and two different quiet treatments side by side would read as a
-   mistake. No new visual language is introduced here. */
+   same colour, same hairline, same 160ms.
+
+   It no longer sits beside a citation: the per-claim `.cite` line came off the
+   default screen on 2026-08-30 (see PlainEnglish.jsx), so this trigger now appears
+   only inside the Why layer and the evidence audit. The treatment is kept anyway —
+   it is the mockup's established "quiet, secondary, still clickable" language, and
+   inventing a second one for the same job would be the mistake. */
 
 .viewev {
   appearance: none;
@@ -19,14 +23,3 @@
 }
 .viewev:hover,
 .viewev:focus-visible { color: var(--cream); border-color: var(--faint) }
-
-/* The `.cite` line and this trigger share a row under each claim. `.cite` sets its
-   own margin-top; when the two sit together the wrapper owns the spacing instead. */
-.citerow {
-  margin-top: 11px;
-  display: flex;
-  align-items: baseline;
-  gap: 8px 16px;
-  flex-wrap: wrap;
-}
-.citerow .cite { margin-top: 0 }
