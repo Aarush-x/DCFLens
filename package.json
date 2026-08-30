@@ -2,13 +2,24 @@
   "name": "dcflens",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/web"],
+  "workspaces": ["web", "apps/web"],
   "scripts": {
-    "dev:web": "npm run dev --workspace @dcflens/web",
-    "lint:web": "npm run lint --workspace @dcflens/web",
-    "typecheck:web": "npm run typecheck --workspace @dcflens/web",
-    "test:web": "npm run test --workspace @dcflens/web",
-    "build:web": "npm run build --workspace @dcflens/web"
+    "dev": "npm run dev --workspace web",
+    "build": "npm run build --workspace web",
+    "lint": "npm run lint --workspace web",
+    "test": "npm run test --workspace web",
+    "check": "bash web/check.sh",
+
+    "dev:web": "npm run dev --workspace web",
+    "build:web": "npm run build --workspace web",
+    "lint:web": "npm run lint --workspace web",
+    "test:web": "npm run test --workspace web",
+
+    "dev:legacy": "npm run dev --workspace @dcflens/web",
+    "build:legacy": "npm run build --workspace @dcflens/web",
+    "lint:legacy": "npm run lint --workspace @dcflens/web",
+    "typecheck:legacy": "npm run typecheck --workspace @dcflens/web",
+    "test:legacy": "npm run test --workspace @dcflens/web"
   },
   "engines": {
     "node": ">=20.9.0"
