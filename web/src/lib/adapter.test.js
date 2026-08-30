@@ -16,7 +16,9 @@ import { describe, expect, it } from 'vitest'
 import envelope from '../mocks/msft-live.json'
 import {
   AI_FALLBACK,
+  IMPLIED_GROWTH_UNSOLVED,
   NO_PRICE,
+  VERDICT_WITHHELD,
   businessQuality,
   historicalGrowthPct,
   toCannotValue,
@@ -30,7 +32,13 @@ const results = envelope.analysis.deterministic_checklist.results
 
 /* ── the price gap: the assertions that matter most ─────────────────────────── */
 
-describe('the price gap (product non-negotiable #3)', () => {
+/* SCOPED, not deleted. src/mocks/msft-live.json carries no `market_price` key at
+ * all, so every assertion below is the price-ABSENT path — which docs/API.md v3
+ * invariant 1 says must degrade identically to `status: "UNAVAILABLE"`. That is
+ * still the live response today, and it is still the state this product must never
+ * paper over. The two price-PRESENT states are asserted further down, in "the
+ * market price and the plausibility gate". */
+describe('the price gap, with no market_price key at all (non-negotiable #3)', () => {
   it('returns price.current === null, and specifically not 0', () => {
     expect(view.price.current).toBeNull()
     expect(view.price.current).not.toBe(0)
@@ -623,5 +631,382 @@ describe('completeness', () => {
     const json = JSON.stringify(view)
     expect(json).not.toContain('"current":0')
     expect(json).toContain(`"${NO_PRICE}"`)
+  })
+})
+
+/* ── the market price and the plausibility gate (docs/API.md v3) ─────────────── */
+
+/* The two keys that close D-017. These build on the same msft-live envelope, so
+ * everything asserted above still holds around them and only the price-dependent
+ * half changes.
+ *
+ * MSFT's own numbers, which the fixtures below are chosen against:
+ *   low 127.30 · mid 159.66 · high 212.20
+ */
+const IN_RANGE = 165
+const ABOVE_RANGE = 260
+const BELOW_RANGE = 100
+
+const quoteOf = (price) => ({
+  symbol: 'MSFT',
+  price,
+  currency: 'USD',
+  quoted_at: '2026-08-28T20:00:00Z',
+  retrieved_at: '2026-08-30T14:07:11Z',
+  source: 'Yahoo Finance',
+  source_url: 'https://finance.yahoo.com/quote/MSFT',
+  exchange_name: 'NasdaqGS',
+})
+
+/** An envelope with a price and a gate on it. Everything else is the live capture. */
+function priced(price, plausibility, marketOverrides = {}) {
+  return {
+    ...envelope,
+    market_price: {
+      status: 'AVAILABLE',
+      quote: quoteOf(price),
+      unavailable_reason: null,
+      message: null,
+      ...marketOverrides,
+    },
+    plausibility,
+  }
+}
+
+const SOUND = {
+  level: 'SOUND',
+  can_state_verdict: true,
+  reasons: [],
+  price_to_midpoint_ratio: 1.033,
+  price_position: 'in_range',
+  summary: 'The price sits inside our estimated range and nothing in the analysis looks out of place.',
+}
+
+const UNRELIABLE = {
+  level: 'UNRELIABLE',
+  can_state_verdict: false,
+  reasons: [
+    {
+      signal: 'price_to_midpoint_ratio_extreme',
+      severity: 'DISQUALIFYING',
+      explanation:
+        "Today's price is more than nine times our estimate. A gap that large usually means our estimate is wrong, not that the market is.",
+    },
+  ],
+  price_to_midpoint_ratio: 9.31,
+  price_position: 'above_range',
+  summary: 'Our estimate is too far from the market price for us to call this one.',
+}
+
+describe('a price, and the gate open', () => {
+  const v = toView(priced(IN_RANGE, SOUND))
+
+  it('carries the quoted price through, and nothing else', () => {
+    expect(v.price.current).toBe(IN_RANGE)
+    expect(v.priceAvailable).toBe(true)
+    expect(v.price.unavailable_reason).toBeNull()
+    expect(v.price.quote.source).toBe('Yahoo Finance')
+    // Two different facts, both required: a Friday quote fetched on Sunday is
+    // stale, and only the pair says so.
+    expect(v.price.quote.quotedAt).toBe('2026-08-28T20:00:00Z')
+    expect(v.price.quote.retrievedAt).toBe('2026-08-30T14:07:11Z')
+  })
+
+  it('says the verdict word — the state this codebase has never rendered live', () => {
+    expect(v.verdict.label).toBe('FAIRLY_PRICED')
+    expect(v.verdict.unavailable_reason).toBeNull()
+    expect(v.canStateVerdict).toBe(true)
+  })
+
+  it('computes the margin of safety, (mid − current) / current × 100', () => {
+    const expected = ((fv.intrinsic_value_per_share - IN_RANGE) / IN_RANGE) * 100
+    expect(v.verdict.margin_of_safety_pct).toBeCloseTo(expected, 9)
+    // MSFT's mid is below 165, so the estimate is the cheaper side: negative.
+    expect(v.verdict.margin_of_safety_pct).toBeLessThan(0)
+  })
+
+  it('names the quote provider in the sources, now that there is one to name', () => {
+    expect(v.sources.some((x) => x.label.includes('Yahoo Finance'))).toBe(true)
+    // …and does not, on the response that has no quote.
+    expect(view.sources.some((x) => x.label.includes('Yahoo Finance'))).toBe(false)
+  })
+
+  it('reads the backend price_position for WHICH word', () => {
+    for (const [position, word] of [
+      ['below_range', 'UNDERVALUED'],
+      ['in_range', 'FAIRLY_PRICED'],
+      ['above_range', 'OVERVALUED'],
+    ]) {
+      const out = toView(priced(IN_RANGE, { ...SOUND, price_position: position }))
+      expect(out.verdict.label).toBe(word)
+    }
+  })
+
+  it('falls back to the range comparison price_position is defined as', () => {
+    const noPosition = { ...SOUND, price_position: null }
+    expect(toView(priced(BELOW_RANGE, noPosition)).verdict.label).toBe('UNDERVALUED')
+    expect(toView(priced(IN_RANGE, noPosition)).verdict.label).toBe('FAIRLY_PRICED')
+    expect(toView(priced(ABOVE_RANGE, noPosition)).verdict.label).toBe('OVERVALUED')
+  })
+
+  it('carries the plausibility summary and reasons across verbatim', () => {
+    const qualified = {
+      ...SOUND,
+      level: 'QUALIFIED',
+      reasons: [
+        { signal: 'unstable_historical_free_cash_flow', severity: 'QUALIFYING', explanation: 'First.' },
+        { signal: 'high_terminal_concentration', severity: 'QUALIFYING', explanation: 'Second.' },
+      ],
+      summary: 'We can still give an answer, but two things make this shakier than usual.',
+    }
+    const out = toView(priced(IN_RANGE, qualified))
+    expect(out.verdict.label).toBe('FAIRLY_PRICED')
+    expect(out.plausibility.level).toBe('QUALIFIED')
+    expect(out.plausibility.summary).toBe(qualified.summary)
+    // Order preserved — the backend sends them most severe first.
+    expect(out.plausibility.reasons.map((r) => r.explanation)).toEqual(['First.', 'Second.'])
+  })
+
+  it('stops claiming the price is missing everywhere else on the object', () => {
+    expect(v.what_has_to_be_true.unavailable_reason).toBe(IMPLIED_GROWTH_UNSOLVED)
+    expect(v.what_has_to_be_true.summary).not.toMatch(/share price/i)
+    // Still not solved here — that is the backend's engine run backwards.
+    expect(v.what_has_to_be_true.implied_growth_pct).toBeNull()
+    expect(JSON.stringify(v)).not.toContain(`"${NO_PRICE}"`)
+  })
+})
+
+describe('a price, and the gate closed', () => {
+  const v = toView(priced(ABOVE_RANGE, UNRELIABLE))
+
+  it('still shows the price', () => {
+    expect(v.price.current).toBe(ABOVE_RANGE)
+    expect(v.priceAvailable).toBe(true)
+    expect(v.price.unavailable_reason).toBeNull()
+  })
+
+  it('still draws the range', () => {
+    expect(v.price.fair_value_low).toBe(si.lower_bound_per_share)
+    expect(v.price.fair_value_mid).toBe(fv.intrinsic_value_per_share)
+    expect(v.price.fair_value_high).toBe(si.upper_bound_per_share)
+    expect(v.value).toEqual({
+      low: si.lower_bound_per_share,
+      mid: fv.intrinsic_value_per_share,
+      high: si.upper_bound_per_share,
+    })
+  })
+
+  it('withholds the word, and says which of the two silences this is', () => {
+    expect(v.verdict.label).toBeNull()
+    expect(v.verdict.unavailable_reason).toBe(VERDICT_WITHHELD)
+    expect(v.verdict.unavailable_reason).not.toBe(NO_PRICE)
+    expect(v.canStateVerdict).toBe(false)
+  })
+
+  it('withholds the margin of safety with it — the same verdict said in numbers', () => {
+    expect(v.verdict.margin_of_safety_pct).toBeNull()
+  })
+
+  it('flags the bar so the zone words cannot state the verdict in a picture', () => {
+    expect(v.price.verdict_withheld).toBe(true)
+    expect(toView(priced(IN_RANGE, SOUND)).price.verdict_withheld).toBe(false)
+    expect(view.price.verdict_withheld).toBe(false)
+  })
+
+  it("surfaces the backend's sentences rather than inventing its own", () => {
+    expect(v.plausibility.summary).toBe(UNRELIABLE.summary)
+    expect(v.plausibility.reasons[0].explanation).toBe(UNRELIABLE.reasons[0].explanation)
+    expect(v.plausibility.reasons[0].severity).toBe('DISQUALIFYING')
+    expect(v.verdict.headline).toBe(UNRELIABLE.summary)
+  })
+
+  it('keeps everything the gap never touched', () => {
+    expect(v.canValue).toBe(true)
+    expect(v.verdict.business_quality).toBe(view.verdict.business_quality)
+    expect(v.the_math.discount_rate_pct).toBe(view.the_math.discount_rate_pct)
+    expect(v.checks).toHaveLength(view.checks.length)
+  })
+})
+
+describe('the gate is obeyed, never recomputed', () => {
+  /* The whole point of D-027: the thresholds live in the backend so they cannot
+     drift into two languages, and so a refusal cannot be bypassed by pointing a
+     different client at the API. */
+  it('says no word when can_state_verdict is false and NOTHING ELSE looks wrong', () => {
+    const looksFine = {
+      level: 'SOUND',
+      can_state_verdict: false,
+      reasons: [],
+      price_to_midpoint_ratio: 1.033,
+      price_position: 'in_range',
+      summary: 'No verdict this time.',
+    }
+    const v = toView(priced(IN_RANGE, looksFine))
+    expect(v.verdict.label).toBeNull()
+    expect(v.verdict.margin_of_safety_pct).toBeNull()
+    expect(v.verdict.unavailable_reason).toBe(VERDICT_WITHHELD)
+    // and the price is on the screen regardless
+    expect(v.price.current).toBe(IN_RANGE)
+  })
+
+  it('does not read final_valuation.warnings to second-guess an open gate', () => {
+    // The live capture already carries one: "unstable_historical_free_cash_flow".
+    expect(fv.warnings.length).toBeGreaterThan(0)
+    expect(toView(priced(IN_RANGE, SOUND)).verdict.label).toBe('FAIRLY_PRICED')
+  })
+
+  it('treats anything but a literal true as a closed gate', () => {
+    for (const value of [false, null, undefined, 'true', 1, {}]) {
+      const v = toView(priced(IN_RANGE, { ...SOUND, can_state_verdict: value }))
+      expect(v.verdict.label, `can_state_verdict: ${JSON.stringify(value)}`).toBeNull()
+      expect(v.canStateVerdict).toBe(false)
+    }
+  })
+
+  it('withholds the word when plausibility is missing entirely', () => {
+    const v = toView({ ...envelope, market_price: { status: 'AVAILABLE', quote: quoteOf(IN_RANGE) } })
+    expect(v.verdict.label).toBeNull()
+    expect(v.verdict.unavailable_reason).toBe(VERDICT_WITHHELD)
+    expect(v.plausibility.stated).toBe(false)
+    // The price is still real, and still shown.
+    expect(v.price.current).toBe(IN_RANGE)
+  })
+})
+
+describe('no price: UNAVAILABLE and a missing key degrade identically (invariant 1)', () => {
+  const REASONS = [
+    'quote_provider_disabled',
+    'quote_symbol_not_found',
+    'quote_provider_rate_limited',
+    'quote_provider_timeout',
+    'quote_provider_unavailable',
+    'quote_provider_invalid_response',
+  ]
+
+  const priceFields = (v) => ({
+    current: v.price.current,
+    priceReason: v.price.unavailable_reason,
+    withheld: v.price.verdict_withheld,
+    label: v.verdict.label,
+    verdictReason: v.verdict.unavailable_reason,
+    mos: v.verdict.margin_of_safety_pct,
+    implied: v.what_has_to_be_true.implied_growth_pct,
+    impliedReason: v.what_has_to_be_true.unavailable_reason,
+    priceAvailable: v.priceAvailable,
+    canStateVerdict: v.canStateVerdict,
+  })
+
+  it('reads every named reason as no price at all', () => {
+    for (const reason of REASONS) {
+      const v = toView({
+        ...envelope,
+        market_price: { status: 'UNAVAILABLE', quote: null, unavailable_reason: reason, message: 'No price.' },
+        plausibility: { ...UNRELIABLE, price_to_midpoint_ratio: null, price_position: null },
+      })
+      expect(priceFields(v), reason).toEqual(priceFields(view))
+    }
+  })
+
+  it("surfaces the backend's own sentence for why there is none", () => {
+    const v = toView({
+      ...envelope,
+      market_price: {
+        status: 'UNAVAILABLE',
+        quote: null,
+        unavailable_reason: 'quote_provider_timeout',
+        message: "The price service didn't answer in time.",
+      },
+    })
+    expect(v.price.unavailable_message).toBe("The price service didn't answer in time.")
+    expect(v.price.quote).toBeNull()
+  })
+})
+
+describe('never a price we do not have (invariant 8)', () => {
+  const MALFORMED = [
+    ['a zero price', { status: 'AVAILABLE', quote: quoteOf(0) }],
+    ['a negative price', { status: 'AVAILABLE', quote: quoteOf(-42) }],
+    ['a price sent as a string', { status: 'AVAILABLE', quote: quoteOf('178.20') }],
+    ['a NaN price', { status: 'AVAILABLE', quote: quoteOf(Number.NaN) }],
+    ['AVAILABLE with no quote', { status: 'AVAILABLE', quote: null }],
+    ['a quote with no price field', { status: 'AVAILABLE', quote: { symbol: 'MSFT' } }],
+    ['UNAVAILABLE carrying a quote anyway', { status: 'UNAVAILABLE', quote: quoteOf(178.2) }],
+    ['a status we do not know', { status: 'PENDING', quote: quoteOf(178.2) }],
+    ['a null market_price', null],
+    ['a market_price that is a string', 'AVAILABLE'],
+  ]
+
+  it.each(MALFORMED)('reads %s as no price, never as a number', (_name, market_price) => {
+    const v = toView({ ...envelope, market_price, plausibility: SOUND })
+    expect(v.price.current).toBeNull()
+    expect(v.price.current).not.toBe(0)
+    expect(v.priceAvailable).toBe(false)
+    expect(v.price.unavailable_reason).toBe(NO_PRICE)
+    // No price means no word, whatever the gate said — invariant 4 from our side.
+    expect(v.verdict.label).toBeNull()
+    expect(v.verdict.margin_of_safety_pct).toBeNull()
+    expect(v.canStateVerdict).toBe(false)
+  })
+
+  it('never emits a zero where a price would sit, in any of the three states', () => {
+    const states = [
+      view,
+      toView(priced(IN_RANGE, SOUND)),
+      toView(priced(ABOVE_RANGE, UNRELIABLE)),
+      toView({ ...envelope, market_price: { status: 'UNAVAILABLE', quote: null, unavailable_reason: 'quote_provider_disabled', message: null } }),
+    ]
+    for (const v of states) {
+      expect(v.price.current === null || v.price.current > 0).toBe(true)
+      expect(JSON.stringify(v)).not.toContain('"current":0')
+      for (const n of [v.verdict.margin_of_safety_pct, v.what_has_to_be_true.implied_growth_pct]) {
+        expect(n === null || n !== 0).toBe(true)
+      }
+    }
+  })
+})
+
+describe('cannot value, with a price in hand', () => {
+  const noValuation = {
+    ...envelope,
+    analysis: { ...envelope.analysis, final_valuation: null },
+    market_price: { status: 'AVAILABLE', quote: quoteOf(178.2), unavailable_reason: null, message: null },
+    plausibility: {
+      level: 'UNRELIABLE',
+      can_state_verdict: false,
+      reasons: [
+        {
+          signal: 'no_valuation_produced',
+          severity: 'DISQUALIFYING',
+          explanation: "This company doesn't produce the spare cash our method needs.",
+        },
+      ],
+      price_to_midpoint_ratio: null,
+      price_position: null,
+      summary: "We can't value this company reliably, so we won't say whether it's cheap or expensive.",
+    },
+  }
+
+  it('refuses the valuation without also hiding the price', () => {
+    const v = toView(noValuation)
+    expect(v.verdict.label).toBe('CANNOT_VALUE')
+    expect(v.canValue).toBe(false)
+    expect(v.price.current).toBe(178.2)
+    expect(v.priceAvailable).toBe(true)
+    expect(v.price.unavailable_reason).toBeNull()
+  })
+
+  it('has no range to compare it against, and states no margin', () => {
+    const v = toView(noValuation)
+    expect(v.price).toMatchObject({ fair_value_low: null, fair_value_mid: null, fair_value_high: null })
+    expect(v.verdict.margin_of_safety_pct).toBeNull()
+    expect(v.canStateVerdict).toBe(false)
+    expect(v.price.verdict_withheld).toBe(false)
+  })
+
+  it('keeps the price null on an error body, which carries no quote', () => {
+    const v = toView({ error: { code: 'unsupported_ticker', message: 'No filings', request_id: 'r1' } })
+    expect(v.price.current).toBeNull()
+    expect(v.price.unavailable_reason).toBe(NO_PRICE)
+    expect(v.priceAvailable).toBe(false)
   })
 })

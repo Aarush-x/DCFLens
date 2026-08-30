@@ -21,15 +21,26 @@ import './RangeBar.css'
  * up the verdict. The price label is pinned to --cream in CSS; only the knob
  * inherits.
  *
- * Two states the mockup never had, both of which are live today:
+ * Three states the mockup never had:
  *
- *   current === null  The API carries no market price (D-017). The valuation is
- *                     still real, so the band and both bounds render — but the
- *                     knob and its label are omitted entirely and the three zone
- *                     words are replaced by a line saying there is nothing to
- *                     compare against. Parking the knob at zero or at the
- *                     midpoint would be inventing a price, which is the one
- *                     thing D-017 forbids.
+ *   current === null  The API carries no market price. The valuation is still
+ *                     real, so the band and both bounds render — but the knob and
+ *                     its label are omitted entirely and the three zone words are
+ *                     replaced by a line saying there is nothing to compare
+ *                     against. Parking the knob at zero or at the midpoint would
+ *                     be inventing a price, which is the one thing D-017 forbids.
+ *
+ *   verdict withheld  A price, a range, and `plausibility.can_state_verdict`
+ *                     false: the adapter stamps `price.verdict_withheld` and the
+ *                     knob goes on the bar with the price beside it. The three
+ *                     zone words do NOT — "LOOKS CHEAP · FAIRLY PRICED · LOOKS
+ *                     EXPENSIVE" under a placed marker states the verdict in a
+ *                     picture, and the gate withheld it in words. The bar keeps
+ *                     its geometry and says instead why no reading follows.
+ *                     Colour comes from the parent, which leaves the tint neutral
+ *                     in this state (AppScreen keys it off `verdict.label`, and
+ *                     there is none), so the knob renders in --cream and the
+ *                     traffic lights stay out of it.
  *
  *   no usable range   Missing bounds, or low >= high. A zero-width range is a
  *                     point estimate wearing a range's clothes, which product
@@ -64,7 +75,13 @@ function axisFor(values) {
   const spread = hi - lo || Math.abs(hi) || 1
   const pad = spread * 0.22
   const step = niceStep((spread + pad * 2) / 5)
-  const min = Math.floor((lo - pad) / step) * step
+  /* Never below zero while every value is positive. A price is nine times the
+     estimate — the withheld state, and the widest axis this bar ever draws — and
+     the padding alone would open it at −$500. A negative tick on a share-price
+     axis is not a scale, it is a distraction from the one thing the bar is
+     showing: how far apart those two numbers are. */
+  const floorAt = lo >= 0 ? 0 : -Infinity
+  const min = Math.max(floorAt, Math.floor((lo - pad) / step) * step)
   const max = Math.ceil((hi + pad) / step) * step
 
   const ticks = []
@@ -84,6 +101,9 @@ export default function RangeBar({ price }) {
   const labelEl = useRef(null)
 
   const current = isNum(price?.current) ? price.current : null
+  /* Set by src/lib/adapter.js. The price object is everything this component is
+     handed, so the gate rides on it — see the header. */
+  const withheld = price?.verdict_withheld === true
   const low = isNum(price?.fair_value_low) ? price.fair_value_low : null
   const high = isNum(price?.fair_value_high) ? price.fair_value_high : null
   const hasRange = low !== null && high !== null && low < high
@@ -136,9 +156,11 @@ export default function RangeBar({ price }) {
   }
 
   const label =
-    current !== null
-      ? `Estimated worth ${priceShort(low)} to ${priceShort(high)}, against ${fmtPrice(current)} today`
-      : `Estimated worth ${priceShort(low)} to ${priceShort(high)}. No market price to compare against.`
+    current === null
+      ? `Estimated worth ${priceShort(low)} to ${priceShort(high)}. No market price to compare against.`
+      : withheld
+        ? `Estimated worth ${priceShort(low)} to ${priceShort(high)}, against ${fmtPrice(current)} today. We aren't calling this one either way.`
+        : `Estimated worth ${priceShort(low)} to ${priceShort(high)}, against ${fmtPrice(current)} today`
 
   return (
     <div className="bar" ref={root} role="img" aria-label={label}>
@@ -174,13 +196,22 @@ export default function RangeBar({ price }) {
         )}
       </div>
 
-      {knobPct !== null ? (
+      {/* .noprice takes .zones' slot and its exact vertical rhythm, so the bar is
+          the same height in all three states and nothing below it moves. */}
+      {knobPct !== null && !withheld && (
         <div className="zones">
           <span>Looks cheap</span>
           <span>Fairly priced</span>
           <span>Looks expensive</span>
         </div>
-      ) : (
+      )}
+      {knobPct !== null && withheld && (
+        <p className="noprice">
+          That&rsquo;s where today&rsquo;s price falls against our estimate. We&rsquo;re not
+          reading a verdict off a gap this wide.
+        </p>
+      )}
+      {knobPct === null && (
         <p className="noprice">
           We don&rsquo;t have today&rsquo;s share price, so there is nothing to place on this range yet.
         </p>

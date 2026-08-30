@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { price, range, cleanName } from '../lib/format.js'
+import { VERDICT_WITHHELD } from '../lib/adapter.js'
 import ConfidenceChip from './ConfidenceChip.jsx'
 import Eyebrow from './ui/Eyebrow.jsx'
 import Label from './ui/Label.jsx'
@@ -28,32 +29,41 @@ import Label from './ui/Label.jsx'
  * weak business at a cheap one — the headline refuses a colour and the subheading
  * names the tension out loud.
  *
- * ── What the live API actually supplies ──────────────────────────────────────
- * `business_quality` is real today: the adapter derives it from
+ * ── What supplies each axis ──────────────────────────────────────────────────
+ * `business_quality` is real in every state: the adapter derives it from
  * `analysis.deterministic_checklist`, which needs no quote, and docs/API.md
  * defines the axis as independent of price precisely because of that.
  *
- * `combination` is null today, and so is `label`, because there is no market price
- * (D-017) and five of the six legal strings encode a price judgement. A
- * combination is therefore derived ONLY when both axes are known — never from the
- * quality axis alone. `Insufficient evidence` is not smuggled in as a headline for
- * a valuation that succeeded.
+ * `label` is the price axis, and docs/API.md v3 puts one gate on it —
+ * `plausibility.can_state_verdict`. The adapter reads that gate and hands this
+ * component either a word or a null with a reason; NOTHING HERE RE-DERIVES IT.
+ * A combination is composed only when both axes are known — never from the quality
+ * axis alone, because five of the six legal strings encode a price judgement.
  *
- * ── The states, and which one the live API reaches ───────────────────────────
- *   verdict       both axes -> the combination headline, the price/range sentence
- *                 beneath it, and the two-axis readout above the range bar.
- *   price-only    price but no quality axis -> exactly the mockup: the verdict
- *                 word, coloured, over the price-vs-range sentence. No axis
- *                 readout, because one axis is not two (the prompt's own fallback:
- *                 render the price axis alone rather than guess the other).
- *   no-price      range but price === null. THE DEFAULT PATH TODAY. A verdict is
- *                 by definition price vs value, so there is no word and no marker.
- *                 The range becomes the headline. The quality axis still renders
- *                 when we have it, and the price axis says, in the readout, that
- *                 we do not have a price — never an invented one.
- *   cannot-value  the designed refusal, copy from the s-novalue section of
- *                 design/app.html. Not an error page (non-negotiable #3), and no
- *                 axes or chip: the refusal is the whole message.
+ * ── The states ───────────────────────────────────────────────────────────────
+ *   verdict           both axes -> the combination headline, the price/range
+ *                     sentence beneath it, the two-axis readout above the range
+ *                     bar, and — when the gate opened with caveats attached — the
+ *                     backend's own caveat sentences under the sub-line.
+ *   price-only        price but no quality axis -> exactly the mockup: the verdict
+ *                     word, coloured, over the price-vs-range sentence. No axis
+ *                     readout, because one axis is not two.
+ *   verdict-withheld  a price AND a range, and the gate closed on the word
+ *                     (adapter VERDICT_WITHHELD). Not a new design: it is the
+ *                     no-price layout with the price filled in — the range leads,
+ *                     the price is stated as the fact it is, and the sub-line and
+ *                     the caveat block say, in the backend's beginner-readable
+ *                     sentences, that our estimate sits too far from the market
+ *                     for us to call it. No word and no colour: a coloured
+ *                     headline is a verdict said in paint.
+ *   no-price          range but price === null. A verdict is by definition price
+ *                     vs value, so there is no word and no marker. The range
+ *                     becomes the headline. The quality axis still renders when we
+ *                     have it, and the price axis says, in the readout, that we do
+ *                     not have a price — never an invented one.
+ *   cannot-value      the designed refusal, copy from the s-novalue section of
+ *                     design/app.html. Not an error page (non-negotiable #3), and
+ *                     no axes or chip: the refusal is the whole message.
  */
 
 /* Verdict words, colours and clauses are the mockup's own — index.html's scrub
@@ -238,6 +248,27 @@ const AXIS_CLAUSE = {
   maxWidth: '36ch',
 }
 
+/* The gate's own sentences. One quiet block under the sub-line, marked off by the
+   same hairline the readout uses rather than by a colour: these explain why we are
+   not calling it, and painting them red would say "bad company" when what they
+   say is "our number is not good enough". Severity is the only field the contract
+   lets us style on, and we style on it by ordering — the backend sends them most
+   severe first — not by paint. */
+const CAVEATS = {
+  margin: '0 0 26px',
+  padding: '0 0 0 16px',
+  borderLeft: '1px solid var(--hair)',
+  maxWidth: '54ch',
+  listStyle: 'none',
+}
+
+const CAVEAT = {
+  margin: '0 0 8px',
+  fontSize: 14.5,
+  lineHeight: 1.6,
+  color: 'var(--dim)',
+}
+
 const isNum = (n) => typeof n === 'number' && Number.isFinite(n)
 
 /** "2026-08-29" -> "29 August 2026". UTC so the date never slips a day. */
@@ -272,12 +303,13 @@ export default function VerdictBanner({ data }) {
   const scope = useRef(null)
   const head = useRef(null)
   const sub = useRef(null)
+  const caveats = useRef(null)
   const axes = useRef(null)
 
   useGSAP(() => {
     if (!head.current) return
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    const parts = [head.current, sub.current, axes.current].filter(Boolean)
+    const parts = [head.current, sub.current, caveats.current, axes.current].filter(Boolean)
     if (reduce) { gsap.set(parts, { opacity: 1, y: 0 }); return }
 
     /* playApp() in design/index.html: headline up first, sub overlapping into it.
@@ -286,6 +318,7 @@ export default function VerdictBanner({ data }) {
     const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
       .from(head.current, { opacity: 0, y: 22, duration: 0.6 })
       .from(sub.current, { opacity: 0, y: 14, duration: 0.55 }, '-=.35')
+    if (caveats.current) tl.from(caveats.current, { opacity: 0, y: 12, duration: 0.5 }, '-=.34')
     if (axes.current) tl.from(axes.current, { opacity: 0, y: 12, duration: 0.5 }, '-=.32')
   }, { scope, dependencies: [data], revertOnUpdate: true })
 
@@ -316,6 +349,26 @@ export default function VerdictBanner({ data }) {
   const combination = legalCombination(v.combination) ?? combinationFor(quality, label)
   const tension = tensionFor(quality, label)
 
+  /* The gate, as the adapter read it — never as this component re-derives it. A
+     word withheld with a price in hand is its own state; a word withheld for want
+     of a price is the no-price state below, and the two must never wear each
+     other's copy. */
+  const withheld = !cannotValue && current !== null && v.unavailable_reason === VERDICT_WITHHELD
+
+  /* The backend writes these for a beginner and they are rendered verbatim, in the
+     order sent (most severe first). Two is the most this block will carry: past
+     that it stops being the reason and starts being the page.
+
+     Nothing here on the no-price screen. The gate's one reason there is that we
+     have no price — which the sub-line has just said and the readout below is
+     about to say again. A third telling is the wall this block must not become. */
+  const plausibility = data.plausibility ?? null
+  const caveatList =
+    cannotValue || current === null
+      ? []
+      : (plausibility?.reasons ?? []).filter((r) => r?.explanation).slice(0, 2)
+  const gateSummary = plausibility?.summary ?? null
+
   let state = 'no-price'
   let headline = range(low, high)
   let color = 'var(--cream)'
@@ -331,6 +384,18 @@ export default function VerdictBanner({ data }) {
         We&rsquo;d rather show you nothing than a number we don&rsquo;t trust.
         Here&rsquo;s what got in the way.
         {v.detail ? ` ${v.detail}` : ''}
+      </>
+    )
+  } else if (withheld) {
+    /* The no-price layout with the price filled in: the range is the headline, the
+       price is stated beneath it as the fact it is, and the word stays unsaid. No
+       verdict colour — a coloured headline is a verdict said in paint. */
+    state = 'verdict-withheld'
+    body = (
+      <>
+        {price(current)} today, against an estimated {range(low, high)}.{' '}
+        {gateSummary ??
+          "That gap is wide enough that the likeliest explanation is our estimate, not the market — so we won't call this one either way."}
       </>
     )
   } else if (combination) {
@@ -386,7 +451,8 @@ export default function VerdictBanner({ data }) {
   }
 
   const eyebrow = eyebrowText(data)
-  const rangeHeadline = state === 'no-price' || state === 'no-verdict'
+  const rangeHeadline =
+    state === 'no-price' || state === 'no-verdict' || state === 'verdict-withheld'
   /* Two axes or none. One axis under a two-column heading would read as a broken
      layout rather than as a missing reading. */
   const showAxes = Boolean(qualityAxis) && !cannotValue
@@ -420,9 +486,29 @@ export default function VerdictBanner({ data }) {
           block below always starts the same distance down the page. */}
       {/* 54px is the mockup's gap from the sub-line to the bar. With the readout in
           between, this half shrinks and AXES carries the rest. */}
-      <p ref={sub} style={{ ...SUB, marginBottom: showAxes ? 26 : 54 }}>
+      {/* 54px is the mockup's gap from the sub-line to the bar, and it is shared
+          out between whatever stands in it: the caveats when there are any, the
+          axis readout when it renders, and the sub-line's own margin last. */}
+      <p
+        ref={sub}
+        style={{ ...SUB, marginBottom: caveatList.length ? 18 : showAxes ? 26 : 54 }}
+      >
         {body}
       </p>
+
+      {caveatList.length > 0 && (
+        <ul
+          ref={caveats}
+          style={{ ...CAVEATS, marginBottom: showAxes ? 26 : 54 }}
+          data-caveats={state === 'verdict-withheld' ? 'withheld' : 'qualified'}
+        >
+          {caveatList.map((r) => (
+            <li key={r.signal ?? r.explanation} style={CAVEAT}>
+              {r.explanation}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {showAxes && (
         <div ref={axes} style={AXES}>
@@ -432,6 +518,20 @@ export default function VerdictBanner({ data }) {
               word={priceAxis.word}
               color={priceAxis.color}
               clause={priceAxis.clause}
+            />
+          ) : withheld ? (
+            /* We have the price. What we do not have is permission to rank it, so
+               the number stands here as a fact — in the neutral text colour, never
+               a traffic light — and the clause says why no word follows it. */
+            <Axis
+              label="The price"
+              word={price(current)}
+              color="var(--cream)"
+              /* Our own clause, as on every other axis — the backend's sentences
+                 are already on the page above, in the sub-line and the caveats,
+                 and printing one of them a second time inside 200px is how a
+                 refusal turns into a wall. */
+              clause="We have today's price. What we don't have is enough faith in our own estimate to rank it against one."
             />
           ) : (
             /* Never an em dash and never a zero — the gap is stated (D-017). */
