@@ -60,18 +60,5 @@
 
    .lbl already carries 22px of margin below it, so this only needs to close that
    gap upward and re-open it downward. */
-.plain-english .ainote {
-  margin: -10px 0 26px;
-  padding-left: 14px;
-  border-left: 1px solid var(--hair2);
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--dim);
-  max-width: 56ch;
-}
-/* --cream, not --faint: this is the sentence that tells the reader the numbers
-   below are still real, and DESIGN.md §3 has --faint failing AA on black. */
-.plain-english .ainote b { color: var(--cream); font-weight: 500 }
-/* The provider's own reason code. Kept — it is what makes this debuggable — but
-   demoted, because a snake_case token is jargon and jargon does not lead. */
-.plain-english .ainote .why { color: var(--faint); font-family: var(--m); font-size: 11.5px }
+/* The `.ainote` rules that lived here are gone with the component — the
+   AI-unavailable message is AiFallbackNotice.css now. */

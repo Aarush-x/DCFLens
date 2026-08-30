@@ -224,32 +224,20 @@ function partition(items, data) {
   }
 }
 
-/* ── the write-up we didn't get ───────────────────────────────────────────────
+/* ── the write-up we didn't get: NOT here any more ────────────────────────────
  *
- * Gemini fails every call in production, so this renders on every live response.
- * It used to be a full-width bordered card between the range bar and the panes —
- * the second thing on the screen, interrupting the argument to apologise before
- * the argument had started.
+ * This file used to own the AI-unavailable message, as a hairline-left `.ainote`
+ * under the heading. It now lives in src/components/AiFallbackNotice.jsx, mounted
+ * by AppScreen directly above this section — one message, not two, and no raw
+ * `provider_failure` enum in the parenthetical.
  *
- * It belongs here instead. The thing that is missing is the written case, and the
- * written case is this section, so the notice is a caveat ON the heading rather
- * than a page-level announcement: pane-width, no box, one hairline down its left
- * edge. It says exactly what it said before — every figure on the page is real —
- * it just no longer says it across the whole page, or first.
+ * What carried over is the placement argument: it sits in THIS pane, above this
+ * heading, and not full-width between the range bar and the panes. The thing that
+ * is missing is the written case, and the written case is this section. What
+ * changed is only its treatment — a --surface inset rather than a bare hairline,
+ * because a system message that is going to appear on every single live response
+ * should read as a designed state rather than as stray text.
  */
-function AiNote({ reason }) {
-  return (
-    <p className="ainote">
-      <b>Written explanation unavailable.</b> The estimate, the range and the
-      assumptions behind them are unaffected &mdash; they come from the filings, not
-      from the write-up. What&rsquo;s missing is only the part that turns those
-      numbers into sentences.
-      {reason ? <span className="why"> ({reason})</span> : null}
-    </p>
-  )
-}
-
-const aiUnavailable = (data) => data?.aiStatus === 'DETERMINISTIC_FALLBACK'
 
 /**
  * @param {object} props
@@ -271,7 +259,6 @@ export default function PlainEnglish({ items, data }) {
     return (
       <section className="plain-english">
         <Label>What happened</Label>
-        {aiUnavailable(data) && <AiNote reason={data.aiFallbackReason} />}
         {cards.length === 0
           ? <p className="empty">We don’t have a written account of what got in the way.</p>
           : cards.map((item, i) => (
@@ -288,7 +275,6 @@ export default function PlainEnglish({ items, data }) {
   return (
     <section className="plain-english">
       <Label>Why we think so</Label>
-      {aiUnavailable(data) && <AiNote reason={data.aiFallbackReason} />}
 
       <Block
         heading="What must be true for this to hold"

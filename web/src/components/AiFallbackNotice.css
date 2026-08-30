@@ -1,0 +1,61 @@
+/* ── AiFallbackNotice ─────────────────────────────────────────────────────────
+   Scoped under .ai-fallback, matching PlainEnglish.css and RangeBar.css. Every
+   value is a token; no hex appears here.
+
+   The inset is the mockup's own card recipe — `.box` in design/index.html:
+   1px --hair, radius, --surface fill — with one deliberate omission. `.box`
+   carries box-shadow: var(--cardshadow), the green bloom. A system message must
+   not glow: the bloom is what marks the value cards as the thing worth looking
+   at, and lending it to an apology would put the apology at the top of the
+   visual hierarchy on every live response. */
+
+.ai-fallback {
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 20px 22px 18px;
+  margin: 0 0 34px;
+  max-width: 60ch;
+}
+
+/* --dim, not the .lbl default of --faint. DESIGN.md §3 flags --faint as failing
+   AA on black, and PlainEnglish already made the same substitution for the same
+   reason. --dim is the smallest step that clears it without promoting a label
+   into competition with the heading under it. */
+.ai-fallback .ai-fallback__eyebrow {
+  margin: 0 0 11px;
+  color: var(--dim);
+}
+
+/* Display face at .pe h3's scale, one step down: this heads a notice, not a
+   claim about the company, and must not outrank the four blocks below it. */
+.ai-fallback .ai-fallback__head {
+  margin: 0 0 12px;
+  font-family: var(--fd);
+  font-size: 17px;
+  font-weight: var(--dw);
+  letter-spacing: -.022em;
+  color: var(--cream);
+}
+
+.ai-fallback .ai-fallback__body {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--dim);
+  max-width: 54ch;
+}
+.ai-fallback .ai-fallback__body:last-of-type { margin-bottom: 0 }
+
+/* The reason is tertiary, and it is demoted STRUCTURALLY — a hairline and a size
+   step — rather than by colour. The obvious move is --faint, and that is the one
+   token DESIGN.md §3 says not to reach for on black. */
+.ai-fallback .ai-fallback__why {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dim);
+  max-width: 54ch;
+}

@@ -5,9 +5,11 @@ import { useAnalysis, readParams } from '../../lib/useAnalysis.js'
 import VerdictBanner from '../VerdictBanner.jsx'
 import RangeBar from '../RangeBar.jsx'
 import PlainEnglish from '../PlainEnglish.jsx'
+import AiFallbackNotice from '../AiFallbackNotice.jsx'
 import WhyDrawer from '../WhyDrawer.jsx'
 import EvidenceProvider from '../EvidenceProvider.jsx'
 import TheNumbers from '../TheNumbers.jsx'
+import SourceRecord from '../SourceRecord.jsx'
 import RecentRail, { seedHistory, pushHistory, nameFor } from './RecentRail.jsx'
 import TopBar from './TopBar.jsx'
 import SearchState from './SearchState.jsx'
@@ -224,18 +226,27 @@ function Analysis({ data }) {
 
         {/* The AI-unavailable notice used to sit HERE, full width, between the verdict
             and the reasoning — interrupting the argument to apologise on every live
-            response. It now renders inside PlainEnglish, under the "Why we think so"
-            heading, because the missing write-up IS that section. `data-ai-status`
+            response. It renders in the left pane instead, immediately above the
+            reasoning, because the missing write-up IS that section. `data-ai-status`
             above still carries the state for the harness. */}
 
         <div className="panes">
           <div>
+            {/* Renders nothing at all when the write-up is there. Today it always
+                renders: Gemini fails every live call. */}
+            <AiFallbackNotice data={data} />
             <PlainEnglish items={data.plain_english} data={data} />
             {/* The second layer. The ONLY place jargon is allowed, and only glossed. */}
             <WhyDrawer math={data.the_math} />
           </div>
           <TheNumbers data={data} />
         </div>
+
+        {/* The proof of work, under the argument it backs: the exact document every
+            figure came from, by accession number, with a link to it. It sits above
+            the sources footer because the footer names the archives in general and
+            this names the one filing. */}
+        <SourceRecord data={data} />
 
         <SourcesFooter sources={data.sources} />
       </div>
