@@ -417,7 +417,7 @@ export function historicalGrowthPct(series) {
   return ((last / first) ** (1 / years) - 1) * 100
 }
 
-function toTheMath(fv) {
+function toTheMath(fv, analysis, filing) {
   if (!fv) return null
   const inputs = fv.inputs ?? {}
   const a = fv.assumptions ?? {}
@@ -447,8 +447,8 @@ function toTheMath(fv) {
     ],
     // docs/API.md: the_math.evidence is keyed by field name, absent key === null.
     // The envelope attaches evidence to checklist rows, not to valuation inputs, so
-    // only what is genuinely traceable is claimed here.
-    evidence: {},
+    // only what is genuinely traceable is claimed here — see `mathEvidence`.
+    evidence: mathEvidence(analysis, filing, inputs),
     warnings: arr(fv.warnings).map(String),
   }
 }
@@ -668,7 +668,7 @@ export function toView(envelope) {
     // The envelope has no falsifiers field; they are an AI output. Never invented.
     falsifiers: [],
 
-    the_math: toTheMath(fv),
+    the_math: toTheMath(fv, analysis, filing),
 
     checks: results.map((r) => ({
       label: checkLabel(r),

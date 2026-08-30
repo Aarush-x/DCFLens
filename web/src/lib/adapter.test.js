@@ -259,6 +259,108 @@ describe('evidence', () => {
   })
 })
 
+/* ── evidence for the valuation inputs ──────────────────────────────────────── */
+
+describe('the math: evidence on the inputs', () => {
+  const ev = view.the_math.evidence
+  const OCF = 'us-gaap:NetCashProvidedByUsedInOperatingActivities'
+  const CAPEX = 'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment'
+  const concepts = (key) => ev[key].values_used.map((v) => v.concept)
+
+  it('backs exactly the three inputs a filed figure can reconstruct', () => {
+    expect(Object.keys(ev).sort()).toEqual(
+      ['net_debt', 'shares_outstanding', 'starting_free_cash_flow'],
+    )
+  })
+
+  it('cites no filing for the rates, which are sector priors and not reported', () => {
+    // Present as keys on the_math, absent from evidence: the Why drawer shows the
+    // row and no trigger. Inventing provenance for an assumption is the one thing
+    // the audit surface must never do.
+    expect(view.the_math.discount_rate_pct).not.toBeNull()
+    expect(view.the_math.terminal_growth_pct).not.toBeNull()
+    expect(ev.discount_rate_pct).toBeUndefined()
+    expect(ev.terminal_growth_pct).toBeUndefined()
+  })
+
+  it('cites the two lines whose difference IS the starting free cash flow', () => {
+    expect(concepts('starting_free_cash_flow')).toEqual([OCF, CAPEX])
+    const [ocf, capex] = ev.starting_free_cash_flow.values_used
+    expect(ocf.value - Math.abs(capex.value)).toBe(fv.inputs.starting_free_cash_flow)
+  })
+
+  it('cites the two lines whose difference IS net debt', () => {
+    expect(concepts('net_debt')).toEqual([
+      'us-gaap:LongTermDebt',
+      'us-gaap:CashCashEquivalentsAndShortTermInvestments',
+    ])
+    const [debt, cash] = ev.net_debt.values_used
+    expect(debt.value - cash.value).toBe(fv.inputs.net_debt)
+  })
+
+  it('cites the one line that IS the diluted share count, in shares not dollars', () => {
+    const [shares] = ev.shares_outstanding.values_used
+    expect(shares.concept).toBe('us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding')
+    expect(shares.value).toBe(fv.inputs.diluted_shares)
+    // "shares", not "USD" — the drawer formats on this and would print "$7.5B".
+    expect(shares.unit).toBe('shares')
+  })
+
+  it('takes every citation from the filing the valuation starts from', () => {
+    for (const key of Object.keys(ev)) {
+      expect(ev[key].filing_type).toBe('10-K')
+      expect(ev[key].fiscal_period).toBe('FY2026')
+      expect(ev[key].filed_on).toBe(envelope.latest_filing.filing_date)
+      expect(ev[key].provenance).toBe('xbrl')
+    }
+  })
+
+  it('links to the readable 10-K, never the raw companyfacts JSON', () => {
+    for (const key of Object.keys(ev)) {
+      expect(ev[key].url).toBe(envelope.latest_filing.filing_url)
+      expect(ev[key].url).not.toContain('data.sec.gov')
+      expect(ev[key].data_url).toContain('data.sec.gov')
+    }
+  })
+
+  it('keeps the transformation string the engine recorded, verbatim', () => {
+    const [ocf] = ev.starting_free_cash_flow.values_used
+    expect(ocf.transformation).toContain('free_cash_flow = operating_cash_flow - abs(capital_expenditure)')
+  })
+
+  it('explains each figure in English without naming the XBRL tag', () => {
+    expect(ev.starting_free_cash_flow.values_used[0].label).toBe('Cash from operations')
+    expect(ev.starting_free_cash_flow.calculation).toMatch(/property and equipment/)
+    expect(ev.net_debt.calculation).toMatch(/more than it owes/)
+  })
+
+  /* Refuse rather than guess (non-negotiable #3), at the level of provenance. */
+
+  it('drops a field whose input no reference reproduces', () => {
+    const bent = structuredClone(envelope)
+    bent.analysis.final_valuation.inputs.net_debt = -1234
+    const ev2 = toView(bent).the_math.evidence
+    expect(ev2.net_debt).toBeUndefined()
+    // the fields that still reconcile are unaffected
+    expect(ev2.starting_free_cash_flow).toBeDefined()
+  })
+
+  it('drops a field two different references could equally explain', () => {
+    const bent = structuredClone(envelope)
+    const refs = bent.analysis.deterministic_baseline.traces[0].evidence_references
+    const shares = refs.find((r) => r.xbrl_concept.includes('DilutedShares'))
+    refs.push({ ...shares, evidence_id: 'sec_duplicate_but_distinct' })
+    const ev2 = toView(bent).the_math.evidence
+    expect(ev2.shares_outstanding).toBeUndefined()
+  })
+
+  it('is an empty object, never null, when the envelope carries no traces', () => {
+    const bent = structuredClone(envelope)
+    bent.analysis.deterministic_baseline.traces = []
+    expect(toView(bent).the_math.evidence).toEqual({})
+  })
+})
+
 /* ── the math ───────────────────────────────────────────────────────────────── */
 
 describe('the math', () => {
