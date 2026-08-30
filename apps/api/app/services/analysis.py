@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import date, datetime
 from typing import Any, Protocol
 
@@ -55,6 +55,18 @@ class SecGateway(Protocol):
     ) -> CompanySubmissionProfile: ...
 
 
+class PriceGateway(Protocol):
+    """The seam onto app/data/market, kept structural on purpose.
+
+    This module names no quote type, so the market lane (P1.A1/P1.A2) can land
+    without either side editing the other's files. ``price_for`` never raises,
+    by contract: a quote failure is an UNAVAILABLE price, never an HTTP error
+    (docs/API.md v3, invariant 6).
+    """
+
+    def price_for(self, ticker: str) -> Any: ...
+
+
 @dataclass(frozen=True, slots=True)
 class CompanyData:
     resolution: TickerResolution
@@ -63,7 +75,15 @@ class CompanyData:
 
 
 @dataclass(frozen=True, slots=True)
-class AnalysisEnvelope:
+class AnalysisCore:
+    """The expensive, price-free half of an answer -- and the only half cached.
+
+    Splitting this out of AnalysisEnvelope is what makes a stale quote
+    unrepresentable rather than merely discouraged: the fifteen-minute cache's
+    value type has no price field at all, so serving a cached price is a type
+    error instead of a rule every future edit has to remember.
+    """
+
     ticker: str
     cik: str
     company_name: str
@@ -75,6 +95,38 @@ class AnalysisEnvelope:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisEnvelope:
+    """One request's answer: a cached core plus the two per-request v3 keys.
+
+    ``to_dict`` spreads the core's keys flat and sets ``market_price`` and
+    ``plausibility`` beside them, so the wire format stays a superset of the
+    shape the frontend already reads (docs/API.md v3).
+    """
+
+    core: AnalysisCore
+    market_price: Any | None = None
+    plausibility: Any | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = self.core.to_dict()
+        # Both keys stay absent until the quote provider is wired (P1.A3 parts
+        # 2-3). API.md v3 requires a missing key to degrade exactly as
+        # status UNAVAILABLE does, so omitting one beats emitting a placeholder
+        # we would have to invent -- and inventing is what invariant 8 forbids.
+        if self.market_price is not None:
+            payload["market_price"] = _serialisable(self.market_price)
+        if self.plausibility is not None:
+            payload["plausibility"] = _serialisable(self.plausibility)
+        return payload
+
+
+def _serialisable(value: Any) -> Any:
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
+    return value
 
 
 class _UnavailableGeminiProvider:
@@ -95,24 +147,36 @@ class AnalysisService:
         provider: QualitativeProvider,
         normalized_cache: CacheBackend[str, CompanyData],
         deterministic_cache: CacheBackend[str, DeterministicAnalysis],
-        analysis_cache: CacheBackend[str, AnalysisEnvelope],
-        singleflight: SingleFlight[str, AnalysisEnvelope] | None = None,
+        analysis_cache: CacheBackend[str, AnalysisCore],
+        prices: PriceGateway | None = None,
+        singleflight: SingleFlight[str, AnalysisCore] | None = None,
     ) -> None:
         self._sec = sec
         self._provider = provider
         self._normalized_cache = normalized_cache
         self._deterministic_cache = deterministic_cache
         self._analysis_cache = analysis_cache
+        self._prices = prices
         self._singleflight = singleflight or SingleFlight()
 
     def analyze(self, raw_ticker: str) -> AnalysisEnvelope:
         ticker = normalize_ticker(raw_ticker)
-        cached = self._analysis_cache.get(ticker)
-        if cached is not None:
-            return cached
-        return self._singleflight.run(ticker, lambda: self._analyze_uncached(ticker))
+        core = self._analysis_cache.get(ticker)
+        if core is None:
+            core = self._singleflight.run(
+                ticker, lambda: self._analyze_uncached(ticker)
+            )
+        # Priced after the core resolves and outside the flight, deliberately:
+        # a slow quote must not hold the analysis lock and stall every other
+        # waiter on the same ticker.
+        return AnalysisEnvelope(core, self._price_for(ticker))
 
-    def _analyze_uncached(self, ticker: str) -> AnalysisEnvelope:
+    def _price_for(self, ticker: str) -> Any | None:
+        if self._prices is None:
+            return None
+        return self._prices.price_for(ticker)
+
+    def _analyze_uncached(self, ticker: str) -> AnalysisCore:
         cached = self._analysis_cache.get(ticker)
         if cached is not None:
             return cached
@@ -144,7 +208,7 @@ class AnalysisService:
         latest_filing = (
             asdict(company.profile.filings[0]) if company.profile.filings else None
         )
-        envelope = AnalysisEnvelope(
+        core = AnalysisCore(
             ticker=ticker,
             cik=company.resolution.cik,
             company_name=company.resolution.company_name,
@@ -157,13 +221,13 @@ class AnalysisService:
             analysis=result,
         )
         if result.status is AiAnalysisStatus.APPLIED:
-            self._analysis_cache.set(ticker, envelope)
+            self._analysis_cache.set(ticker, core)
         else:
             logger.info(
                 "analysis_completed_with_deterministic_fallback",
                 extra={"ticker": ticker, "fallback_reason": result.fallback_reason},
             )
-        return envelope
+        return core
 
     def _load_company(self, ticker: str) -> CompanyData:
         cached = self._normalized_cache.get(ticker)

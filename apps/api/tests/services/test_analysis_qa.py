@@ -45,10 +45,10 @@ def test_single_fcf_year_can_return_deterministic_valuation():
         deterministic_cache=MemoryCache(max_entries=8, ttl_seconds=60),
         analysis_cache=MemoryCache(max_entries=8, ttl_seconds=60),
     )
-    result = service.analyze("aapl")
-    assert result.analysis.status is AiAnalysisStatus.DETERMINISTIC_FALLBACK
-    assert result.analysis.final_valuation.intrinsic_value_per_share > 0
-    assert result.analysis.final_valuation.fcf_stability is None
+    core = service.analyze("aapl").core
+    assert core.analysis.status is AiAnalysisStatus.DETERMINISTIC_FALLBACK
+    assert core.analysis.final_valuation.intrinsic_value_per_share > 0
+    assert core.analysis.final_valuation.fcf_stability is None
 
 
 @pytest.mark.parametrize("metric", ["total_debt", "cash_and_short_term_investments", "diluted_average_shares"])

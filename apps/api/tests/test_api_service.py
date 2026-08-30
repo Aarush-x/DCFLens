@@ -53,15 +53,30 @@ def _client(service: _FakeService, *, production: bool = False) -> TestClient:
 
 
 def test_analyze_returns_service_payload_and_request_id() -> None:
-    service = _FakeService(_Response({"ticker": "AAPL", "analysis": {"status": "APPLIED"}}))
+    service = _FakeService(
+        _Response(
+            {
+                "ticker": "AAPL",
+                "analysis": {"status": "APPLIED"},
+                "market_price": {"status": "AVAILABLE", "quote": {"price": 178.2}},
+                "plausibility": {"level": "SOUND", "can_state_verdict": True},
+            }
+        )
+    )
     client = _client(service)
 
     response = client.get("/api/analyze/aapl", headers={"X-Request-ID": "test-123"})
+    body = response.json()
 
     assert response.status_code == 200
-    assert response.json()["ticker"] == "AAPL"
+    assert body["ticker"] == "AAPL"
     assert response.headers["X-Request-ID"] == "test-123"
     assert service.calls == ["aapl"]
+    # The handler returns service.analyze(ticker).to_dict() verbatim, so the two
+    # v3 keys reach the body with no handler change at all. That absence of a
+    # change is the assertion worth making.
+    assert body["market_price"]["status"] == "AVAILABLE"
+    assert body["plausibility"]["can_state_verdict"] is True
 
 
 @pytest.mark.parametrize(
