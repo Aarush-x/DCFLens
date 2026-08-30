@@ -1,0 +1,130 @@
+/* ── EvidenceAudit styles.
+
+   design/index.html has no checklist block, so there is nothing to port verbatim
+   here. Rather than invent a visual language, every rule below is borrowed from a
+   block the mockup DOES define, for the same reason it was used there:
+
+     .blkh / .hint    — .plain-english's four-block headings (a block heading is
+                        structure and must outrank the rows it groups)
+     .pip             — the mockup's 6px claim pip, same size, same flex:none
+     hairline rows    — .mathrow in WhyDrawer.css, which is the other list of
+                        judgements inside the Why layer
+     .rule / .detail  — .mathrow .k em, the gloss treatment
+
+   Scoped under .evidence-audit. Not wrapped in @layer components: a co-located
+   sheet is its own PostCSS entry with no @tailwind directive, so Tailwind rejects
+   the layer — same as RangeBar.css, PlainEnglish.css and WhyDrawer.css. */
+
+.evidence-audit { margin-top: 34px }
+
+/* Borrowed from .plain-english .blkh. --cream, not the --faint .lbl default:
+   DESIGN.md §3 flags --faint as failing AA, and a section heading is the last
+   place to spend that. Label renders .lbl, so the colour is overridden here. */
+.evidence-audit .blkh {
+  display: block;
+  margin: 0 0 7px;
+  font-family: var(--m);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--cream);
+}
+
+.evidence-audit .hint {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--dim);
+  max-width: 60ch;
+}
+
+.evidence-audit .auditlist { list-style: none; margin: 0; padding: 0 }
+
+/* One row per check. The hairline separators are .mathrow's, so the audit and the
+   maths read as two lists in one drawer rather than two components. */
+.evidence-audit .chk { padding: 18px 0; border-bottom: 1px solid var(--hair) }
+.evidence-audit .chk:last-child { border-bottom: none }
+
+/* The outcome leads the row, above the label, because the outcome is what a
+   scanning reader is looking for and a right-hand column would have to fight
+   "Not enough evidence" for width at every breakpoint. */
+.evidence-audit .chkstate {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+/* The mockup's claim pip, unchanged. Decorative: the word carries the state. */
+.evidence-audit .pip { width: 6px; height: 6px; border-radius: 50%; flex: none }
+.evidence-audit .chkstate .word {
+  font-family: var(--m);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+/* The checklist's own item number. Tertiary, and deliberately not a score: it says
+   which of a fixed list this is, never how many of them came back green. */
+.evidence-audit .chkstate .no {
+  margin-left: auto;
+  font-family: var(--m);
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.evidence-audit .chklabel {
+  margin: 0 0 6px;
+  font-family: var(--fd);
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -.018em;
+  color: var(--cream);
+}
+
+/* The analyst's original wording of the rule — the jargon this layer exists to
+   permit. Kept smallest and quietest: it is the rule, not the finding. */
+.evidence-audit .rule {
+  margin: 0 0 7px;
+  font-family: var(--m);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--faint);
+  max-width: 58ch;
+}
+
+/* The finding. Same treatment as .mathrow .k em. */
+.evidence-audit .detail {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--dim);
+  max-width: 58ch;
+}
+.evidence-audit .detail + .detail { margin-top: 5px }
+
+/* What a refusal would need in order to stop being one. Italic, so it reads as an
+   aside about the row rather than as another finding. */
+.evidence-audit .need {
+  margin: 7px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--faint);
+  font-style: italic;
+  max-width: 58ch;
+}
+
+/* Set aside, not hidden. The row keeps its full structure and steps back a level:
+   the label drops from --cream to --dim and the whole row loses a little presence,
+   which is enough to read as "considered, then excluded" without making it so
+   faint that a reader has to wonder whether it failed. */
+.evidence-audit .chk.na .chklabel { color: var(--dim); font-weight: 500 }
+.evidence-audit .chk.na .rule { color: var(--faint) }
+.evidence-audit .chk.na .detail { color: var(--faint) }
+.evidence-audit .chk.na .chkstate .word { opacity: .85 }
+
+/* The evidence trigger sits under the finding, on its own line — the same
+   relationship .mathrow gives its "Source" trigger. */
+.evidence-audit .viewev { display: inline-block; margin-top: 10px }

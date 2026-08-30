@@ -417,6 +417,106 @@ export function historicalGrowthPct(series) {
   return ((last / first) ** (1 / years) - 1) * 100
 }
 
+/* ── where the value comes from ─────────────────────────────────────────────── */
+
+/** The present values of the ten projected years, when `decomposition` does not
+ *  state their sum. Null unless every year carries one — a partial sum would
+ *  understate the near-term half and overstate the terminal share, which is the
+ *  exact direction this block must never be wrong in. */
+function sumPresentValues(rows) {
+  const vals = arr(rows).map((r) => num(r?.present_value))
+  if (!vals.length || vals.some((v) => v === null)) return null
+  return vals.reduce((a, b) => a + b, 0)
+}
+
+/**
+ * The terminal-value split, for TerminalValueShare.jsx.
+ *
+ * `terminal_value_pct` above already carries the engine's own
+ * `terminal_value.concentration`, but one number cannot draw a two-part bar. The
+ * envelope states both halves outright, in `decomposition`:
+ *
+ *   present_value_projected_cash_flows + present_value_terminal_value = enterprise_value
+ *
+ * so both are carried across, and the share is computed FROM that pair rather than
+ * read off `concentration` — a percentage derived from the same two numbers the bar
+ * is drawn from cannot disagree with the bar. `concentration` is the fallback for an
+ * envelope that omits the decomposition; then the two amounts are null and the
+ * component draws from the share alone.
+ *
+ * Returns null when there is no honest share to state: no enterprise value to take
+ * a share of, or a total that is zero or negative.
+ */
+function toTerminalValue(fv) {
+  const tv = fv?.terminal_value ?? {}
+  const d = fv?.decomposition ?? {}
+
+  const beyond = num(d.present_value_terminal_value) ?? num(tv.present_value)
+  const projected =
+    num(d.present_value_projected_cash_flows) ?? sumPresentValues(fv?.projected_cash_flows)
+
+  const total = beyond === null || projected === null ? null : beyond + projected
+  // A share needs a whole to be a share of.
+  if (total !== null && total <= 0) return null
+
+  const share = total !== null ? (beyond / total) * 100 : toPct(tv.concentration)
+  if (share === null) return null
+
+  return {
+    share_pct: share,
+    // Both amounts, or neither: one figure beside an em dash in a two-line legend
+    // reads as a missing number rather than as a split we could not resolve.
+    present_value: total === null ? null : beyond,
+    projected_present_value: total === null ? null : projected,
+    total_present_value: total,
+  }
+}
+
+/* ── sensitivity ────────────────────────────────────────────────────────────── */
+
+/**
+ * The published sensitivity interval, for SensitivityMatrix.jsx.
+ *
+ * `final_valuation.sensitivity_interval` is the engine's own answer to "how much do
+ * our assumptions matter": it re-runs the DCF with growth shifted −δ and the discount
+ * rate shifted +δ (the pessimistic corner), and again the other way (the optimistic
+ * corner). Its `evaluated_points` carry ONLY those two corners plus nothing in
+ * between, so the matrix cannot be read off the envelope — it is rebuilt from these
+ * deltas and the assumptions the drawer already shows, then checked back against
+ * these three published figures. See SensitivityMatrix.jsx.
+ *
+ * Deltas arrive as decimal fractions (`units.rates`) and leave as percentage points,
+ * matching every other rate in `the_math`. Returns null unless the interval is
+ * complete and both deltas are positive — a zero delta describes no interval at all,
+ * and a grid built on it would be one number printed twenty-five times.
+ */
+function toSensitivity(fv) {
+  const si = fv?.sensitivity_interval
+  if (!si) return null
+
+  const growth = toPct(si.growth_rate_delta)
+  const discount = toPct(si.discount_rate_delta)
+  if (growth === null || discount === null || growth <= 0 || discount <= 0) return null
+
+  const central = num(si.central_value_per_share) ?? num(fv.intrinsic_value_per_share)
+  const low = num(si.lower_bound_per_share)
+  const high = num(si.upper_bound_per_share)
+  if (central === null || low === null || high === null) return null
+
+  return {
+    method: str(si.method),
+    // The engine states this outright, and it is false: the bounds are a
+    // perturbation, not a confidence interval. Carried so no component can imply
+    // a probability the envelope never claimed.
+    is_probability_interval: si.is_probability_interval === true,
+    growth_delta_pct: growth,
+    discount_delta_pct: discount,
+    central_per_share: central,
+    low_per_share: low,
+    high_per_share: high,
+  }
+}
+
 function toTheMath(fv, analysis, filing) {
   if (!fv) return null
   const inputs = fv.inputs ?? {}
@@ -438,8 +538,10 @@ function toTheMath(fv, analysis, filing) {
     terminal_growth_pct: toPct(a.terminal_growth_rate),
     discount_rate_pct: toPct(a.discount_rate),
     terminal_value_pct: toPct(fv.terminal_value?.concentration),
+    terminal_value: toTerminalValue(fv),
     net_debt: num(inputs.net_debt),
     shares_outstanding: num(inputs.diluted_shares),
+    sensitivity: toSensitivity(fv),
     scenarios: [
       { name: 'Pessimistic', value_per_share: num(si.lower_bound_per_share), growth_pct: shift(-1) },
       { name: 'Realistic', value_per_share: num(fv.intrinsic_value_per_share), growth_pct: stageOne },
