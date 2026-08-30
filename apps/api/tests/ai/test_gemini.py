@@ -64,7 +64,8 @@ def test_gemini_client_sends_structured_output_schema_and_header() -> None:
     http_request = captured["request"]
     body = json.loads(http_request.data)
     assert text == '{"example": "valid"}'
-    assert captured["timeout"] == 17.0
+    # The per-model deadline includes the tiny amount of setup time already used.
+    assert captured["timeout"] == pytest.approx(17.0, abs=0.01)
     assert http_request.get_header("X-goog-api-key") == "secret-placeholder"
     assert body["generationConfig"]["responseMimeType"] == "application/json"
     assert body["generationConfig"]["maxOutputTokens"] == 16_384

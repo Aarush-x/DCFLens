@@ -11,6 +11,7 @@ from http.client import HTTPException
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from app.ai.models import ProviderRequest
 
@@ -27,7 +28,7 @@ MAX_OUTPUT_TOKENS = 16_384
 # available to new users"), so as a fallback it turned every recoverable blip
 # on the primary into a hard "All reviewed Gemini models failed".
 REVIEWED_FALLBACK_MODELS = ("gemini-3.5-flash-lite",)
-RETRYABLE_HTTP_STATUSES = frozenset({429, 500, 502, 503})
+RETRYABLE_HTTP_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 MAX_TRANSIENT_RETRIES = 2
 MAX_REQUEST_ATTEMPTS = 8
 MAX_GENERATION_SECONDS = 60.0
@@ -86,6 +87,7 @@ class _GeminiOutput:
 @dataclass(slots=True)
 class _RequestBudget:
     deadline: float
+    call_id: str
     attempts: int = 0
 
 
@@ -127,26 +129,38 @@ class GeminiClient:
         budget = _RequestBudget(
             deadline=self._clock() + min(
                 MAX_GENERATION_SECONDS, 2 * self._config.timeout_seconds
-            )
+            ),
+            call_id=uuid4().hex,
         )
         last_malformed_text: str | None = None
         for index, model in enumerate(self._models):
             has_fallback = index + 1 < len(self._models)
+            # Share the remaining time, not just the attempt count. A slow
+            # primary must not consume the fallback model's opportunity.
+            now = self._clock()
+            model_deadline = now + (budget.deadline - now) / (len(self._models) - index)
             try:
                 output = self._generate(
                     request,
                     model=model,
                     budget=budget,
+                    model_deadline=model_deadline,
                 )
             except GeminiProviderError as exc:
-                if has_fallback and exc.fallback_reason in {
-                    "provider_invalid_request",
-                    "provider_model_unavailable",
-                    "provider_rate_limit",
-                    "provider_unavailable",
-                }:
+                if (
+                    has_fallback
+                    and self._clock() < budget.deadline
+                    and budget.attempts < MAX_REQUEST_ATTEMPTS
+                    and exc.fallback_reason in {
+                        "provider_invalid_request",
+                        "provider_model_unavailable",
+                        "provider_rate_limit",
+                        "provider_unavailable",
+                        "provider_timeout",
+                    }
+                ):
                     self._log_model_fallback(
-                        model, exc.fallback_reason, self._models[index + 1]
+                        model, exc.fallback_reason, self._models[index + 1], budget
                     )
                     continue
                 raise
@@ -163,18 +177,19 @@ class GeminiClient:
                         "candidate_token_count": output.candidate_token_count,
                         "thought_token_count": output.thought_token_count,
                         "response_chars": len(output.text),
+                        "gemini_call_id": budget.call_id,
                     },
                 )
                 if has_fallback:
                     self._log_model_fallback(
-                        model, "malformed_json", self._models[index + 1]
+                        model, "malformed_json", self._models[index + 1], budget
                     )
                     continue
             else:
                 if index > 0:
                     logger.info(
                         "gemini_fallback_model_succeeded",
-                        extra={"gemini_model": model},
+                        extra={"gemini_model": model, "gemini_call_id": budget.call_id},
                     )
                 return output.text
 
@@ -188,21 +203,25 @@ class GeminiClient:
         *,
         model: str,
         budget: _RequestBudget,
+        model_deadline: float,
     ) -> _GeminiOutput:
         include_response_schema = True
         transient_retries = 0
         while True:
-            remaining = budget.deadline - self._clock()
+            remaining = min(budget.deadline, model_deadline) - self._clock()
             if remaining <= 0 or budget.attempts >= MAX_REQUEST_ATTEMPTS:
-                self._log_failure("provider_timeout", model=model)
+                self._log_budget_exhausted(model, budget, model_deadline)
                 raise GeminiTimeoutError("Gemini request budget exhausted")
             budget.attempts += 1
+            timeout = min(self._config.timeout_seconds, remaining)
+            attempt_started = self._clock()
             try:
                 output = self._generate_once(
                     request,
                     model=model,
                     include_response_schema=include_response_schema,
-                    timeout_seconds=min(self._config.timeout_seconds, remaining),
+                    timeout_seconds=timeout,
+                    budget=budget,
                 )
             except GeminiProviderError as exc:
                 if (
@@ -215,18 +234,22 @@ class GeminiClient:
                             "http_status": exc.http_status,
                             "provider_status": exc.provider_status,
                             "gemini_model": model,
+                            "gemini_call_id": budget.call_id,
                         },
                     )
                     include_response_schema = False
                     continue
                 if (
-                    exc.http_status not in RETRYABLE_HTTP_STATUSES
+                    (
+                        exc.http_status not in RETRYABLE_HTTP_STATUSES
+                        and exc.fallback_reason != "provider_timeout"
+                    )
                     or transient_retries >= MAX_TRANSIENT_RETRIES
                     or budget.attempts >= MAX_REQUEST_ATTEMPTS
                 ):
                     raise
                 delay = (2 ** transient_retries) + self._jitter() * 0.25
-                if delay >= budget.deadline - self._clock():
+                if delay >= min(budget.deadline, model_deadline) - self._clock():
                     raise
                 transient_retries += 1
                 logger.warning(
@@ -237,13 +260,27 @@ class GeminiClient:
                         "retry_number": transient_retries,
                         "attempt_number": budget.attempts,
                         "delay_seconds": round(delay, 3),
+                        "fallback_reason": exc.fallback_reason,
+                        "gemini_call_id": budget.call_id,
                     },
                 )
                 self._sleep(delay)
                 continue
             if self._clock() >= budget.deadline:
-                self._log_failure("provider_timeout", model=model)
+                self._log_budget_exhausted(model, budget, model_deadline)
                 raise GeminiTimeoutError("Gemini request budget exhausted")
+            logger.info(
+                "gemini_request_succeeded",
+                extra={
+                    "gemini_call_id": budget.call_id,
+                    "gemini_model": model,
+                    "attempt_number": budget.attempts,
+                    "elapsed_ms": round((self._clock() - attempt_started) * 1000, 2),
+                    "finish_reason": output.finish_reason,
+                    "candidate_token_count": output.candidate_token_count,
+                    "thought_token_count": output.thought_token_count,
+                },
+            )
             return output
 
     def _generate_once(
@@ -253,12 +290,16 @@ class GeminiClient:
         model: str,
         include_response_schema: bool,
         timeout_seconds: float,
+        budget: _RequestBudget,
     ) -> _GeminiOutput:
         generation_config: dict[str, Any] = {
             "responseMimeType": "application/json",
-            "temperature": 0.1,
             "maxOutputTokens": MAX_OUTPUT_TOKENS,
         }
+        # Gemini 3.x recommends the model's default sampling settings. Forcing
+        # 0.1 is not what makes the valuation deterministic (Python does that).
+        if not model.startswith("gemini-3"):
+            generation_config["temperature"] = 0.1
         if include_response_schema:
             generation_config["responseJsonSchema"] = request.response_schema
         system_instruction = request.system_instruction
@@ -293,13 +334,47 @@ class GeminiClient:
             },
             method="POST",
         )
+        started = self._clock()
+        phase = "connection_or_headers"
+        attempt_details = {
+            "gemini_call_id": budget.call_id,
+            "attempt_number": budget.attempts,
+            "timeout_seconds": round(timeout_seconds, 3),
+            "configured_timeout_seconds": self._config.timeout_seconds,
+            "request_bytes": len(body),
+            "schema_mode": "json_schema" if include_response_schema else "json",
+        }
+        logger.info(
+            "gemini_request_started",
+            extra={
+                **attempt_details,
+                "gemini_model": model,
+                "budget_remaining_seconds": round(max(0, budget.deadline - started), 3),
+            },
+        )
+
+        def log_failure(reason: str, *, exception: Exception | None = None, **details: Any) -> None:
+            self._log_failure(
+                reason,
+                model=model,
+                diagnostics={
+                    **attempt_details,
+                    "phase": phase,
+                    "elapsed_ms": round((self._clock() - started) * 1000, 2),
+                    "budget_remaining_seconds": round(max(0, budget.deadline - self._clock()), 3),
+                    "error_type": type(exception).__name__ if exception is not None else None,
+                },
+                **details,
+            )
+
         try:
             with self._opener(
                 http_request, timeout=timeout_seconds
             ) as response:
+                phase = "response_body"
                 payload_bytes = response.read(self._config.max_response_bytes + 1)
         except (TimeoutError, socket.timeout) as exc:
-            self._log_failure("provider_timeout", model=model)
+            log_failure("provider_timeout", exception=exc)
             raise GeminiTimeoutError("Gemini request timed out") from exc
         except HTTPError as exc:
             provider_status, provider_reason, provider_message = (
@@ -309,9 +384,9 @@ class GeminiClient:
             fallback_reason = _classify_http_failure(
                 exc.code, provider_status, provider_reason
             )
-            self._log_failure(
+            log_failure(
                 fallback_reason,
-                model=model,
+                exception=exc,
                 http_status=exc.code,
                 provider_status=provider_status,
                 provider_reason=provider_reason,
@@ -337,27 +412,28 @@ class GeminiClient:
             ) from exc
         except URLError as exc:
             if isinstance(exc.reason, (TimeoutError, socket.timeout)):
-                self._log_failure("provider_timeout", model=model)
+                log_failure("provider_timeout", exception=exc.reason)
                 raise GeminiTimeoutError("Gemini request timed out") from exc
-            self._log_failure("provider_unavailable", model=model)
+            log_failure("provider_unavailable", exception=exc)
             raise GeminiProviderError(
                 "Gemini request failed",
                 fallback_reason="provider_unavailable",
             ) from exc
         except OSError as exc:
-            self._log_failure("provider_unavailable", model=model)
+            log_failure("provider_unavailable", exception=exc)
             raise GeminiProviderError(
                 "Gemini request failed",
                 fallback_reason="provider_unavailable",
             ) from exc
         except HTTPException as exc:
-            self._log_failure("provider_unavailable", model=model)
+            log_failure("provider_unavailable", exception=exc)
             raise GeminiProviderError(
                 "Gemini response was interrupted", fallback_reason="provider_unavailable"
             ) from exc
 
+        phase = "response_validation"
         if len(payload_bytes) > self._config.max_response_bytes:
-            self._log_failure("provider_response_too_large", model=model)
+            log_failure("provider_response_too_large")
             raise GeminiProviderError("Gemini response exceeded the configured size limit")
         try:
             payload = json.loads(payload_bytes)
@@ -377,10 +453,10 @@ class GeminiClient:
                     texts.append(part["text"])
             text = "".join(texts)
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
-            self._log_failure("provider_invalid_response", model=model)
+            log_failure("provider_invalid_response", exception=exc)
             raise GeminiProviderError("Gemini returned an invalid response envelope") from exc
         if not isinstance(text, str) or not text.strip():
-            self._log_failure("provider_empty_response", model=model)
+            log_failure("provider_empty_response")
             raise GeminiProviderError("Gemini returned no structured response text")
         usage = payload.get("usageMetadata", {})
         if not isinstance(usage, dict):
@@ -396,7 +472,9 @@ class GeminiClient:
             ),
         )
 
-    def _log_model_fallback(self, model: str, reason: str, next_model: str) -> None:
+    def _log_model_fallback(
+        self, model: str, reason: str, next_model: str, budget: _RequestBudget
+    ) -> None:
         logger.warning(
             "gemini_trying_reviewed_fallback_model",
             extra={
@@ -405,6 +483,26 @@ class GeminiClient:
                 # The model actually tried next, not a hardcoded name. The literal
                 # here used to disagree with the chain the moment either changed.
                 "fallback_gemini_model": next_model,
+                "gemini_call_id": budget.call_id,
+                "budget_remaining_seconds": round(max(0, budget.deadline - self._clock()), 3),
+            },
+        )
+
+    def _log_budget_exhausted(
+        self, model: str, budget: _RequestBudget, model_deadline: float
+    ) -> None:
+        phase = "attempt_limit"
+        if self._clock() >= budget.deadline:
+            phase = "generation_deadline"
+        elif self._clock() >= model_deadline:
+            phase = "model_deadline"
+        self._log_failure(
+            "provider_timeout", model=model,
+            diagnostics={
+                "gemini_call_id": budget.call_id,
+                "attempt_number": budget.attempts,
+                "phase": phase,
+                "budget_remaining_seconds": round(max(0, budget.deadline - self._clock()), 3),
             },
         )
 
@@ -417,10 +515,12 @@ class GeminiClient:
         provider_status: str | None = None,
         provider_reason: str | None = None,
         provider_message: str | None = None,
+        diagnostics: dict[str, Any] | None = None,
     ) -> None:
         logger.warning(
             "gemini_request_failed",
             extra={
+                **(diagnostics or {}),
                 "fallback_reason": fallback_reason,
                 "http_status": http_status,
                 "provider_status": provider_status,

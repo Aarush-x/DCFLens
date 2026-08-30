@@ -16,11 +16,13 @@ pytest.importorskip("render")
 from render.workflows.executor import TaskExecutor
 
 from app import workflow
+from app.ai.gemini import GeminiTimeoutError
 from app.ai.schema import AI_ADJUSTMENT_BOUNDS
 from app.checklist.contract import ORIGINAL_CHECKLIST
 from app.services.analysis import AnalysisService
 from app.services.cache import MemoryCache
 from app.services.errors import MissingSecDataError, UnsupportedTickerError
+from app.services.quote import MarketPriceService
 from tests.fixtures.sec.company_facts import technology_company
 from tests.services.test_analysis_qa import company_data
 
@@ -37,6 +39,11 @@ def service_with_provider(provider):
         normalized_cache=MemoryCache(max_entries=8, ttl_seconds=60),
         deterministic_cache=MemoryCache(max_entries=8, ttl_seconds=60),
         analysis_cache=MemoryCache(max_entries=8, ttl_seconds=60),
+        prices=MarketPriceService(
+            provider=None,
+            success_cache=MemoryCache(max_entries=8, ttl_seconds=60),
+            failure_cache=MemoryCache(max_entries=8, ttl_seconds=60),
+        ),
     )
 
 
@@ -61,13 +68,13 @@ class EvidenceProvider:
 
 class TimeoutProvider:
     def generate(self, request):
-        raise TimeoutError("private provider detail must not escape")
+        raise GeminiTimeoutError("private provider detail must not escape")
 
 
 @pytest.mark.parametrize("provider,status", [
     (EvidenceProvider(), "APPLIED"), (TimeoutProvider(), "DETERMINISTIC_FALLBACK"),
 ])
-def test_real_sdk_executes_complete_pipeline(monkeypatch, provider, status):
+def test_real_sdk_executes_complete_pipeline(monkeypatch, caplog, provider, status):
     monkeypatch.setattr(workflow, "_build_service", lambda: service_with_provider(provider))
     executor = TaskExecutor(workflow.app._registry, SimpleNamespace())
     outcome = asyncio.run(executor._execute_task("analyze_company", ["aapl"]))
@@ -78,14 +85,47 @@ def test_real_sdk_executes_complete_pipeline(monkeypatch, provider, status):
     assert result["ticker"] == "AAPL"
     assert isinstance(result["sec_retrieved_at"], str)
     analysis = result["analysis"]
+    assert output["ai_status"] == analysis["status"]
+    assert output["fallback_reason"] == analysis["fallback_reason"]
+    assert result["market_price"]["status"] == "UNAVAILABLE"
+    assert result["market_price"]["unavailable_reason"] == "quote_provider_disabled"
+    assert isinstance(result["plausibility"], dict)
     assert analysis["final_valuation"]["intrinsic_value_per_share"] > 0
     assert not analysis["final_valuation"]["sensitivity_interval"]["is_probability_interval"]
     assert [item["checklist_text"] for item in analysis["deterministic_checklist"]["results"]] == [item.text for item in ORIGINAL_CHECKLIST]
     if status == "APPLIED":
         assert analysis["adjustments"][0]["evidence_references"]
     if status == "DETERMINISTIC_FALLBACK":
-        assert output["fallback_reason"]
+        assert output["fallback_reason"] == "provider_timeout"
         assert analysis["final_valuation"] == analysis["baseline_valuation"]
+    assert "private provider detail" not in caplog.text
+    assert "private provider detail" not in json.dumps(output)
+
+
+@pytest.mark.parametrize("attribute", ["status", "fallback_reason"])
+def test_result_metadata_errors_stay_inside_sanitized_task_boundary(
+    monkeypatch, caplog, attribute
+):
+    class BrokenAnalysis:
+        def __getattr__(self, name):
+            if name == attribute:
+                raise RuntimeError("GOOGLE_API_KEY=secret private prompt")
+            return "APPLIED"
+
+    envelope = SimpleNamespace(
+        core=SimpleNamespace(analysis=BrokenAnalysis()),
+        to_dict=lambda: {"analysis": {}},
+    )
+    monkeypatch.setattr(workflow, "_build_service", lambda: SimpleNamespace(
+        analyze=lambda ticker: envelope,
+    ))
+    outcome = asyncio.run(TaskExecutor(workflow.app._registry, SimpleNamespace())
+                          ._execute_task("analyze_company", ["AAPL"]))
+    assert isinstance(outcome.error, workflow.WorkflowAnalysisError)
+    assert str(outcome.error) == "workflow_configuration_or_internal_error"
+    assert outcome.error.__suppress_context__
+    assert "secret" not in caplog.text
+    assert "private prompt" not in caplog.text
 
 
 @pytest.mark.parametrize("ticker", [None, 123, "", "AAPL\nInjected", "AAPL/../../", "A" * 40])

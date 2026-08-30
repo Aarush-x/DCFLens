@@ -48,6 +48,12 @@ def run_analysis(ticker: str) -> dict:
         result = jsonable_encoder(envelope.to_dict())
         # Do not silently turn non-finite calculations into nonstandard JSON.
         json.dumps(result, allow_nan=False)
+        # The service stores analysis in its cached core; to_dict() keeps the
+        # public result.analysis shape flat. Read metadata inside this boundary
+        # so a future contract mismatch cannot leak an SDK exception payload.
+        analysis = envelope.core.analysis
+        status = str(analysis.status)
+        fallback_reason = analysis.fallback_reason
     except Exception as exc:
         # Never log exception text, credentials, prompts, or provider bodies.
         # Explicit allowlist also protects the SDK's own exception reporting.
@@ -63,13 +69,12 @@ def run_analysis(ticker: str) -> dict:
         )
         raise WorkflowAnalysisError(reason) from None
 
-    status = str(envelope.analysis.status)
     duration = round(monotonic() - started, 3)
     logger.info(
         "workflow_analysis_completed",
         extra={
             "ticker": ticker, "ai_status": status,
-            "fallback_reason": envelope.analysis.fallback_reason,
+            "fallback_reason": fallback_reason,
             "duration_seconds": duration,
         },
     )
@@ -77,7 +82,7 @@ def run_analysis(ticker: str) -> dict:
         "workflow": "dcflens-analysis-v1",
         "data_mode": "live",
         "ai_status": status,
-        "fallback_reason": envelope.analysis.fallback_reason,
+        "fallback_reason": fallback_reason,
         "duration_seconds": duration,
         "result": result,
     }
