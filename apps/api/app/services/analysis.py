@@ -28,9 +28,17 @@ from app.data.sec import (
     TickerResolution,
     normalize_company_facts,
 )
+from app.data.market import (
+    MarketPrice,
+    QuoteConfigurationError,
+    YahooQuoteClient,
+    YahooQuoteConfig,
+)
 from app.valuation.adaptive import CompanyProfile, classify_company
 from app.valuation.models import DcfInput, DcfValidationError, SensitivityConfig
 from app.services.cache import CacheBackend, MemoryCache, SingleFlight
+from app.services.plausibility import PlausibilityAssessment, assess_plausibility
+from app.services.quote import MarketPriceService
 from app.services.errors import (
     CalculationError,
     InvalidTickerError,
@@ -56,15 +64,14 @@ class SecGateway(Protocol):
 
 
 class PriceGateway(Protocol):
-    """The seam onto app/data/market, kept structural on purpose.
+    """The seam onto app/data/market, kept structural so this module depends on
+    a method rather than on MarketPriceService itself.
 
-    This module names no quote type, so the market lane (P1.A1/P1.A2) can land
-    without either side editing the other's files. ``price_for`` never raises,
-    by contract: a quote failure is an UNAVAILABLE price, never an HTTP error
-    (docs/API.md v3, invariant 6).
+    ``price_for`` never raises, by contract: a quote failure is an UNAVAILABLE
+    price, never an HTTP error (docs/API.md v3, invariant 6).
     """
 
-    def price_for(self, ticker: str) -> Any: ...
+    def price_for(self, ticker: str) -> MarketPrice: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,19 +114,16 @@ class AnalysisEnvelope:
     """
 
     core: AnalysisCore
-    market_price: Any | None = None
-    plausibility: Any | None = None
+    market_price: MarketPrice
+    plausibility: PlausibilityAssessment
 
     def to_dict(self) -> dict[str, Any]:
         payload = self.core.to_dict()
-        # Both keys stay absent until the quote provider is wired (P1.A3 parts
-        # 2-3). API.md v3 requires a missing key to degrade exactly as
-        # status UNAVAILABLE does, so omitting one beats emitting a placeholder
-        # we would have to invent -- and inventing is what invariant 8 forbids.
-        if self.market_price is not None:
-            payload["market_price"] = _serialisable(self.market_price)
-        if self.plausibility is not None:
-            payload["plausibility"] = _serialisable(self.plausibility)
+        # Unconditional, because invariants 1 and 3 make both keys always
+        # present and never null. An absent price is a MarketPrice carrying
+        # UNAVAILABLE and a named reason, never a missing key and never a zero.
+        payload["market_price"] = _serialisable(self.market_price)
+        payload["plausibility"] = _serialisable(self.plausibility)
         return payload
 
 
@@ -148,7 +152,7 @@ class AnalysisService:
         normalized_cache: CacheBackend[str, CompanyData],
         deterministic_cache: CacheBackend[str, DeterministicAnalysis],
         analysis_cache: CacheBackend[str, AnalysisCore],
-        prices: PriceGateway | None = None,
+        prices: PriceGateway,
         singleflight: SingleFlight[str, AnalysisCore] | None = None,
     ) -> None:
         self._sec = sec
@@ -169,12 +173,8 @@ class AnalysisService:
         # Priced after the core resolves and outside the flight, deliberately:
         # a slow quote must not hold the analysis lock and stall every other
         # waiter on the same ticker.
-        return AnalysisEnvelope(core, self._price_for(ticker))
-
-    def _price_for(self, ticker: str) -> Any | None:
-        if self._prices is None:
-            return None
-        return self._prices.price_for(ticker)
+        price = self._prices.price_for(ticker)
+        return AnalysisEnvelope(core, price, assess_plausibility(core.analysis, price))
 
     def _analyze_uncached(self, ticker: str) -> AnalysisCore:
         cached = self._analysis_cache.get(ticker)
@@ -412,14 +412,48 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
             extra={"gemini_model": settings.gemini_model},
         )
         provider = _UnavailableGeminiProvider()
+    quote_provider = None
+    if settings.market_quote_enabled:
+        quote_config: dict[str, Any] = {
+            "timeout_seconds": float(settings.market_quote_timeout_seconds),
+            "max_retries": settings.market_quote_max_retries,
+        }
+        if settings.market_quote_user_agent is not None:
+            # None means no operator override, which is not the same as an empty
+            # identity: the client keeps its own default rather than being handed
+            # a None it will rightly reject.
+            quote_config["user_agent"] = settings.market_quote_user_agent
+        try:
+            quote_provider = YahooQuoteClient(YahooQuoteConfig(**quote_config))
+        except QuoteConfigurationError:
+            # This runs lazily inside the first request, so an exception escaping
+            # here would 500 every request for the life of the process. Degrading
+            # to no provider keeps the promise even when the quote client's own
+            # configuration is what is broken.
+            logger.warning("market_quote_provider_disabled_by_configuration")
     cache_args = {
         "max_entries": settings.cache_max_entries,
         "ttl_seconds": float(settings.cache_ttl_seconds),
     }
+    quote_cache_args = {"max_entries": settings.market_quote_cache_max_entries}
     return AnalysisService(
         sec=sec,
         provider=provider,
         normalized_cache=MemoryCache(**cache_args),
         deterministic_cache=MemoryCache(**cache_args),
         analysis_cache=MemoryCache(**cache_args),
+        prices=MarketPriceService(
+            provider=quote_provider,
+            # Two caches because a successful quote and a failed one deserve very
+            # different lifetimes: a good price may stand for a minute, a provider
+            # outage should be retried far sooner than that.
+            success_cache=MemoryCache(
+                ttl_seconds=float(settings.market_quote_ttl_seconds),
+                **quote_cache_args,
+            ),
+            failure_cache=MemoryCache(
+                ttl_seconds=float(settings.market_quote_failure_ttl_seconds),
+                **quote_cache_args,
+            ),
+        ),
     )

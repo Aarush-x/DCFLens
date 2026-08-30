@@ -17,6 +17,9 @@ LOCAL_CORS_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
 VALID_APP_ENVIRONMENTS = {"development", "test", "production"}
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 VERCEL_SLUG_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+TRUE_SPELLINGS = {"1", "true", "yes", "on"}
+FALSE_SPELLINGS = {"0", "false", "no", "off"}
+MAX_USER_AGENT_LENGTH = 256
 
 load_dotenv()
 
@@ -75,6 +78,48 @@ def _bounded_nonnegative_int(
     return value
 
 
+def _boolean(
+    name: str,
+    default: bool,
+    environment: Mapping[str, str],
+) -> bool:
+    raw_value = _clean(environment.get(name)).lower()
+    if not raw_value:
+        return default
+    if raw_value in TRUE_SPELLINGS:
+        return True
+    if raw_value in FALSE_SPELLINGS:
+        return False
+    spellings = ", ".join(sorted(TRUE_SPELLINGS | FALSE_SPELLINGS))
+    raise RuntimeError(f"{name} must be one of: {spellings}")
+
+
+def _user_agent(
+    name: str,
+    environment: Mapping[str, str],
+) -> str | None:
+    """An operator override, or None to let the provider keep its own default.
+
+    There is no default here on purpose. app/data/market/yahoo.py documents a
+    verified fact -- Yahoo 429s an unidentified client outright -- so its browser
+    identity is a working default this layer must not silently replace.
+    """
+    raw_value = _clean(environment.get(name))
+    if not raw_value:
+        return None
+    # Deliberately regex-free: browser user-agent strings are unstructured, so
+    # there is no shape to match against. The only real hazards are header
+    # injection and unbounded length, and printable ASCII already excludes CR,
+    # LF and every other control character.
+    if len(raw_value) > MAX_USER_AGENT_LENGTH:
+        raise RuntimeError(
+            f"{name} must be at most {MAX_USER_AGENT_LENGTH} characters"
+        )
+    if not raw_value.isascii() or not raw_value.isprintable():
+        raise RuntimeError(f"{name} must contain printable ASCII characters only")
+    return raw_value
+
+
 def _normalize_origin(raw_origin: str) -> str:
     origin = raw_origin.strip().rstrip("/")
     if origin == "*":
@@ -119,6 +164,13 @@ class Settings:
     cache_max_entries: int
     sec_timeout_seconds: int
     sec_max_retries: int
+    market_quote_enabled: bool
+    market_quote_timeout_seconds: int
+    market_quote_max_retries: int
+    market_quote_ttl_seconds: int
+    market_quote_failure_ttl_seconds: int
+    market_quote_cache_max_entries: int
+    market_quote_user_agent: str | None
 
     @property
     def is_production(self) -> bool:
@@ -209,6 +261,35 @@ class Settings:
             ),
             sec_max_retries=_bounded_nonnegative_int(
                 "SEC_MAX_RETRIES", 2, environment, maximum=5
+            ),
+            market_quote_enabled=_boolean(
+                "MARKET_QUOTE_ENABLED", True, environment
+            ),
+            market_quote_timeout_seconds=_bounded_int(
+                "MARKET_QUOTE_TIMEOUT_SECONDS", 5, environment, minimum=1, maximum=30
+            ),
+            market_quote_max_retries=_bounded_nonnegative_int(
+                "MARKET_QUOTE_MAX_RETRIES", 1, environment, maximum=3
+            ),
+            market_quote_ttl_seconds=_bounded_int(
+                "MARKET_QUOTE_TTL_SECONDS", 60, environment, minimum=5, maximum=900
+            ),
+            market_quote_failure_ttl_seconds=_bounded_int(
+                "MARKET_QUOTE_FAILURE_TTL_SECONDS",
+                30,
+                environment,
+                minimum=5,
+                maximum=600,
+            ),
+            market_quote_cache_max_entries=_bounded_int(
+                "MARKET_QUOTE_CACHE_MAX_ENTRIES",
+                128,
+                environment,
+                minimum=1,
+                maximum=1_024,
+            ),
+            market_quote_user_agent=_user_agent(
+                "MARKET_QUOTE_USER_AGENT", environment
             ),
         )
 
