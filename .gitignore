@@ -30,3 +30,6 @@ venv/
 *.log
 npm-debug.log*
 .gstack/
+
+.CLAUDE.MD
+.DESIGN.MD
