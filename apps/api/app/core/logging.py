@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback
 from datetime import datetime, timezone
 
 
@@ -22,7 +23,17 @@ class JsonFormatter(logging.Formatter):
             if key not in _STANDARD_FIELDS and key not in {"message", "asctime"}:
                 payload[key] = value
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            # Exception messages, source lines, locals and chained exceptions
+            # can contain credentials or full provider prompts. Keep locations
+            # and type for diagnosis, never serialize those payloads.
+            kind, _, tb = record.exc_info
+            payload["exception"] = {
+                "type": kind.__name__ if kind else "Unknown",
+                "frames": [
+                    {"file": frame.filename, "line": frame.lineno, "function": frame.name}
+                    for frame in traceback.extract_tb(tb)
+                ],
+            }
         return json.dumps(payload, default=str, separators=(",", ":"))
 
 

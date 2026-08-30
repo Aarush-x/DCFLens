@@ -79,4 +79,6 @@ Fallback is always `Low`. The result includes each factor and its score, plus `i
 
 ## Current integration boundary
 
-The domain service and Gemini REST adapter are implemented without adding an API route or frontend workflow. A later route must authenticate and rate-limit as appropriate, enforce request-size limits, construct evidence from trusted ingestion records, and serialize the existing result without weakening these checks.
+The FastAPI `/api/analyze/{ticker}` route composes SEC Company Facts, deterministic valuation/checklist results, and optional Gemini analysis. It currently supplies structured-fact evidence, not retrieved 10-K narrative or Exhibit 21 text. Public-request authentication/throttling and broader narrative integration remain separate production-hardening/product work. The route serializes validated results without relaxing the domain trust boundaries.
+
+The Gemini adapter combines non-thought answer text parts and never returns thought-marked text. Missing or malformed optional usage metadata does not invalidate an otherwise usable answer. Invalid or empty envelopes, oversized responses, and interrupted reads produce safe diagnostic events; evidence/schema validation still decides whether a response is applied.

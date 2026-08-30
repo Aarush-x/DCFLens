@@ -22,7 +22,17 @@ Errors use a stable envelope with `error.code`, a sanitized `error.message`, and
 | SEC transport or upstream failure | 503 | `sec_provider_unavailable` |
 | Unexpected application failure | 500 | `internal_error` |
 
-Production responses never include stack traces. JSON logs retain the request ID, safe error code, status, latency, and exception type for diagnosis. Full prompts, provider response bodies, API keys, and SEC identity values are not logged.
+Production responses never include stack traces. Sanitized internal errors retain request-ID and configured CORS headers, including browser-readable `X-Request-ID` and `Retry-After`. JSON exception logs retain exception type and stack locations (file, function, line), but omit exception messages, source lines, locals, and exception-chain payloads, which may contain secrets or prompts.
+
+Ticker syntax is checked before analysis dependencies initialize. The health handler runs asynchronously so it does not wait for the worker-thread capacity used by blocking analyses.
+
+## Annual valuation input alignment
+
+Debt and cash must share the latest annual FCF period end. Diluted average shares must share its start and end dates. Missing aligned inputs return `missing_sec_data`; an older year's balance or share count is never silently substituted. If diluted shares are absent, current outstanding shares remain an explicit fallback, restricted to observations dated from fiscal year-end through 120 days afterward. This is a conservative application selection bound, not a claim about SEC filing deadlines. The original source references and dates remain unchanged.
+
+A single available FCF year can still support a prior-backed valuation. Its source fact remains available to adaptive coverage and evidence, but the DCF's optional historical-stability input is empty because a range statistic needs two observations. No extra history is manufactured.
+
+Production startup validates SEC identity using the SEC client's own rules, rejects control characters and invalid CORS ports/wildcard hostnames, bounds cache TTL to 1–86,400 seconds and Gemini timeout to 1–120 seconds, and validates the model identifier before any provider call.
 
 ## CORS
 
@@ -40,4 +50,4 @@ The prototype caches are in memory. They are cleared on restart, are not shared 
 
 Local execution remains `cd apps/api && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`. The Docker image starts with `python -m app`; `app.__main__` binds `0.0.0.0`, reads Render's `PORT`, and defaults to `8000` locally. Both paths import the same `app.main:app` object.
 
-The Docker entry point gives Uvicorn 25 seconds to drain in-flight requests after `SIGTERM`. The Render Blueprint allows 30 seconds before forced termination, leaving a five-second margin for process teardown. The service runs one Uvicorn process so bounded process-local caches and duplicate suppression do not multiply within the prototype container.
+The Docker entry point gives Uvicorn 25 seconds to drain in-flight requests after `SIGTERM`. The repository does not configure a Render shutdown-delay override; platform termination behavior must be verified separately. The service runs one Uvicorn process so bounded process-local caches and duplicate suppression do not multiply within the prototype container.

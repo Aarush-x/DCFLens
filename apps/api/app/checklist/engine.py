@@ -707,6 +707,11 @@ def _aligned(
     return tuple(
         tuple(by_metric[metric][period] for metric in metrics)
         for period in sorted(common_periods, reverse=True)
+        if len({
+            by_metric[metric][period].period_start
+            for metric in metrics
+            if by_metric[metric][period].period_start is not None
+        }) <= 1
     )
 
 

@@ -315,12 +315,16 @@ def _analyze_stability(history: tuple[float, ...]) -> FcfStabilityAnalysis | Non
 
     minimum = min(history)
     maximum = max(history)
-    mean_absolute = sum(abs(value) for value in history) / len(history)
-    normalized_range = (maximum - minimum) / mean_absolute if mean_absolute else 0.0
+    # Scale before summing/subtracting so finite input observations cannot
+    # overflow the stability statistics. This is the same range/mean formula.
+    scale = max(abs(value) for value in history)
+    scaled_mean = sum(abs(value) / scale for value in history) / len(history) if scale else 0.0
+    mean_absolute = scaled_mean * scale
+    normalized_range = (maximum / scale - minimum / scale) / scaled_mean if scale else 0.0
     sign_change_count = sum(
         1
         for previous, current in zip(history, history[1:])
-        if previous * current < 0.0
+        if (previous < 0 < current) or (current < 0 < previous)
     )
     is_unstable = (
         normalized_range >= UNSTABLE_FCF_NORMALIZED_RANGE

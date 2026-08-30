@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from app.core.logging import configure_logging
 from app.core.settings import Settings, settings
 from app.services import AnalysisService, build_analysis_service
+from app.services.analysis import normalize_ticker
 from app.services.errors import (
     AnalysisServiceError,
     CalculationError,
@@ -39,14 +40,6 @@ def create_app(config: Settings = settings) -> FastAPI:
     )
     application.state.settings = config
     application.state.service_lock = threading.Lock()
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=list(config.cors_allowed_origins),
-        allow_origin_regex=config.cors_allowed_origin_regex,
-        allow_credentials=False,
-        allow_methods=["GET"],
-        allow_headers=["Accept", "Content-Type", "X-Request-ID"],
-    )
 
     @application.middleware("http")
     async def request_context(request: Request, call_next: Any) -> Any:
@@ -56,7 +49,12 @@ def create_app(config: Settings = settings) -> FastAPI:
         )
         request.state.request_id = request_id
         started = time.monotonic()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Handle failures inside the CORS/request-ID boundary, before the
+            # framework's outer server-error middleware bypasses those headers.
+            response = await internal_error_handler(request, exc)
         response.headers["X-Request-ID"] = request_id
         logger.info(
             "request_completed",
@@ -112,7 +110,7 @@ def create_app(config: Settings = settings) -> FastAPI:
         )
 
     @application.get("/health", include_in_schema=False)
-    def health() -> dict[str, str]:
+    async def health() -> dict[str, str]:
         """Return process liveness without touching service dependencies."""
         return {"status": "ok", "service": "dcflens-api"}
 
@@ -123,10 +121,21 @@ def create_app(config: Settings = settings) -> FastAPI:
     ) -> dict[str, Any]:
         return service.analyze(ticker).to_dict()
 
+    # Added last so CORS wraps request_context, including sanitized 500s.
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(config.cors_allowed_origins),
+        allow_origin_regex=config.cors_allowed_origin_regex,
+        allow_credentials=False,
+        allow_methods=["GET"],
+        allow_headers=["Accept", "Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID", "Retry-After"],
+    )
     return application
 
 
 def get_analysis_service(request: Request) -> AnalysisService:
+    normalize_ticker(request.path_params["ticker"])
     existing = getattr(request.app.state, "analysis_service", None)
     if existing is not None:
         return existing
