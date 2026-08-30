@@ -29,6 +29,23 @@
 }
 .hunt .bigsearch input::placeholder { color: var(--faint) }
 
+/* The cold-start hint — new here, the mockup has no equivalent. It reads as one
+   sentence of body copy, not a row of chips: chips would compete with the field
+   for the eye and turn an offer into a menu. The names are the only lit thing in
+   it, so what is clickable is obvious without a border around each one.
+
+   --dim for the sentence and --cream for the names. NOT --faint, which DESIGN.md
+   §3 flags as failing AA and which disappears against pitch black. */
+.hunt .starters { margin: 22px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--dim) }
+.hunt .starters button {
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: var(--cream); border-bottom: 1px solid var(--hair2);
+  transition: color .15s, border-color .15s;
+}
+.hunt .starters button:hover,
+.hunt .starters button:focus-visible { color: var(--accent); border-bottom-color: var(--accent) }
+.hunt .starters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
 /* The rail before it has earned a row. */
 .railempty { padding: 2px 22px; font-size: 12.5px; line-height: 1.6; color: var(--dim) }
 
