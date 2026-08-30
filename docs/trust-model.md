@@ -22,6 +22,13 @@ The model cannot alter historical facts, current or diluted shares, net debt, st
 
 Only bounded evidence excerpts and immutable evidence metadata are supplied. Every item has a stable evidence ID and a direct HTTPS SEC URL. Annual-report and exhibit text is explicitly marked as untrusted data and placed inside a delimited JSON document. Instructions appearing inside evidence are data, not commands.
 
+The `compact-v1` policy sends up to 16 intact evidence items, prioritizing baseline
+trace references and disclosing omitted counts. Long items are omitted, not
+truncated. Repeated URLs use a shared source table without changing source records.
+Only transmitted IDs may support AI claims. This limited review is not a full
+filing audit; the evidence-support confidence factor is discounted by the fraction
+of available evidence sent. See [compact-review limits](ai-trust-boundaries.md#compact-qualitative-review-compact-v1).
+
 The server supplies:
 
 - The deterministic assumptions and valuation.
@@ -43,6 +50,11 @@ The provider request asks for JSON using a strict response schema. Provider-leve
 - Any claim, rationale, finding, or disagreement citing an evidence ID absent from the input.
 
 Every claim is labeled `FACT`, `INTERPRETATION`, or `ASSUMPTION`. Evidence support is separately labeled `SUPPORTED`, `PARTIALLY_SUPPORTED`, `UNSUPPORTED`, or `CONTRADICTED`. The provider returns checklist numbers only; Python reattaches the immutable original text. This prevents the model from rewriting or reordering the checklist.
+
+Gemini now returns three assumption adjustments, 1–3 evidence assessments, and
+0–3 optional checklist comments, with short explanations. The complete original
+ten-item checklist is still evaluated deterministically. Absence of AI commentary
+on an item is not a positive or negative conclusion about that item.
 
 The API returns concise rationales, citations, and calculation impacts. It does not request, persist, expose, or depend on private chain-of-thought.
 

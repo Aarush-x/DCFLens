@@ -20,10 +20,35 @@ Billing can change quota, but cannot guarantee a fix for timeouts or overload.
 
 Keep `GOOGLE_API_KEY` only in Render's environment, not code or frontend variables.
 The API web service and Workflow have separate environments. Check both if using
-both. Use `GEMINI_MODEL=gemini-3.5-flash`, `GEMINI_TIMEOUT_SECONDS=30`, and
-`LOG_LEVEL=INFO`; saving environment changes must be followed by a restart or
+both. Use these backend-only recovery settings:
+
+```dotenv
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_TIMEOUT_SECONDS=45
+GEMINI_TOTAL_TIMEOUT_SECONDS=75
+GEMINI_MAX_RETRIES=2
+GEMINI_BACKOFF_SECONDS=1
+LOG_LEVEL=INFO
+```
+
+Existing Render environment overrides such as `GEMINI_TIMEOUT_SECONDS=30` take
+precedence over the new code default. Update the API service and, separately,
+the Workflow environment if using both. Saving changes requires a restart or
 redeployment of the affected service. The Workflow uses the same client recovery
 logic, without adding whole-task retries. Its startup already logs at INFO.
+
+The 75-second budget is shared across models, not 75 seconds for each attempt.
+The primary has a 45-second scheduling window and reserves 30 seconds for the
+fallback by default. Short failures retry with 1s then 2s delays plus jitter;
+a full 45s timeout switches to fallback immediately. Bounds and exact semantics
+are in [AI trust boundaries](ai-trust-boundaries.md#bounded-gemini-recovery).
+The browser currently has a 90-second analysis-request deadline. SEC retrieval,
+valuation, quote retrieval, and response transmission also take time, so 75s of
+AI recovery can still exceed the browser deadline on an uncached request.
+Raising the total budget requires coordinating browser/proxy deadlines, or using
+the existing Workflow path for longer-running analysis. No frontend deadlines
+are changed by this backend patch. Retries may create additional billable model
+requests even if the client timed out waiting for the previous response.
 
 After deploying the fix, refresh one ticker and filter **Application logs** for
 `gemini_`. Group events by `gemini_call_id`. A timeout alone is not the final
@@ -33,6 +58,22 @@ success, or the service's `analysis_completed_with_deterministic_fallback`.
 `response_body` means headers arrived but body reading failed. Only a response
 with `analysis.status: APPLIED` proves domain validation accepted the AI output.
 `/health` deliberately does not test Gemini.
+Failure logs now include `request_duration_ms`, `duration_scope`, configured and
+effective timeout, and the remaining budget. `duration_scope=attempt` excludes
+earlier requests/backoff; `generation` includes them when scheduling is exhausted.
+Only safe diagnostics are logged, not API keys, prompts, or generated text.
+
+The default qualitative workload is now `compact-v1`: up to 16 intact evidence
+items, three assumption decisions, at most three evidence assessments and three
+checklist comments, and a 4,096-token output allowance. Both reviewed Gemini 3.5
+models use minimal thinking. There is no additional environment toggle; deploy
+the updated code to the API service and Workflow to use this policy. Find
+`gemini_context_prepared` to verify selected/omitted counts and prompt size, and
+`gemini_request_started` to verify `max_output_tokens: 4096` and
+`thinking_level: MINIMAL`. See [the compact-review contract](ai-trust-boundaries.md#compact-qualitative-review-compact-v1).
+Only `analysis.status: APPLIED` confirms that Gemini output passed validation.
+Reduced workload does not guarantee availability or turn a failed call into a
+successful one. The complete original ten-point checklist still runs in Python.
 
 For a small diagnostic from the API service's Render Shell (`/app`, if Shell is
 available on your plan), run the following. It reads the existing environment
@@ -58,7 +99,10 @@ try:
     client = GeminiClient(GeminiClientConfig(
         api_key=key,
         model=os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash",
-        timeout_seconds=float(os.environ.get("GEMINI_TIMEOUT_SECONDS") or "30"),
+        timeout_seconds=float(os.environ.get("GEMINI_TIMEOUT_SECONDS") or "45"),
+        total_timeout_seconds=float(os.environ.get("GEMINI_TOTAL_TIMEOUT_SECONDS") or "75"),
+        max_retries=int(os.environ.get("GEMINI_MAX_RETRIES") or "2"),
+        backoff_seconds=float(os.environ.get("GEMINI_BACKOFF_SECONDS") or "1"),
     ))
     text = client.generate(ProviderRequest(
         "Return only the requested JSON. No explanation.",

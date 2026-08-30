@@ -14,7 +14,10 @@ def test_development_defaults_are_safe() -> None:
     )
     assert settings.google_api_key is None
     assert settings.gemini_model == "gemini-3.5-flash"
-    assert settings.gemini_timeout_seconds == 30
+    assert settings.gemini_timeout_seconds == 45
+    assert settings.gemini_total_timeout_seconds == 75
+    assert settings.gemini_max_retries == 2
+    assert settings.gemini_backoff_seconds == 1
     assert settings.port == 8000
     assert settings.cache_max_entries == 128
     assert settings.sec_timeout_seconds == 15
@@ -28,6 +31,54 @@ def test_development_defaults_are_safe() -> None:
     assert settings.market_quote_cache_max_entries == 128
     # Unset means the provider keeps its own verified browser identity.
     assert settings.market_quote_user_agent is None
+
+
+@pytest.mark.parametrize("name,values", [
+    ("GEMINI_TIMEOUT_SECONDS", ["0", "121", "NaN", "1.5"]),
+    ("GEMINI_TOTAL_TIMEOUT_SECONDS", ["0", "121", "inf", "-1"]),
+    ("GEMINI_MAX_RETRIES", ["-1", "4", "1.5", "NaN"]),
+    ("GEMINI_BACKOFF_SECONDS", ["0", "11", "NaN", "inf", "abc"]),
+])
+def test_invalid_gemini_settings_fail_at_startup(name, values):
+    for value in values:
+        with pytest.raises(RuntimeError, match=name):
+            Settings.from_env({name: value})
+
+
+def test_custom_gemini_recovery_settings_reach_service_client(monkeypatch):
+    from app.services import analysis
+
+    captured = []
+    monkeypatch.setattr(analysis, "GeminiClient", lambda config: captured.append(config))
+    settings = Settings.from_env({
+        "GOOGLE_API_KEY": "test-key",
+        "SEC_IDENTITY": "DCFLens qa@example.com",
+        "MARKET_QUOTE_ENABLED": "false",
+        "GEMINI_TIMEOUT_SECONDS": " '40' ",
+        "GEMINI_TOTAL_TIMEOUT_SECONDS": "100",
+        "GEMINI_MAX_RETRIES": "0",
+        "GEMINI_BACKOFF_SECONDS": "0.5",
+    })
+    analysis.build_analysis_service(settings)
+    assert len(captured) == 1
+    assert captured[0].timeout_seconds == 40
+    assert captured[0].total_timeout_seconds == 100
+    assert captured[0].max_retries == 0
+    assert captured[0].backoff_seconds == 0.5
+
+
+def test_example_gemini_settings_match_code_defaults():
+    from pathlib import Path
+    from dotenv import dotenv_values
+
+    example = dotenv_values(Path(__file__).resolve().parents[1] / ".env.example")
+    configured = Settings.from_env(example)
+    defaults = Settings.from_env({})
+    for field in (
+        "gemini_timeout_seconds", "gemini_total_timeout_seconds",
+        "gemini_max_retries", "gemini_backoff_seconds",
+    ):
+        assert getattr(configured, field) == getattr(defaults, field)
 
 
 def test_unknown_application_environment_is_rejected() -> None:

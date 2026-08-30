@@ -40,7 +40,10 @@ so root `render.yaml` intentionally remains unchanged.
 | `SEC_IDENTITY` | `DCFLens your-real-monitored-email@your-domain.com`; replace with your actual contact |
 | `GOOGLE_API_KEY` | Your Gemini secret, entered only in Render Environment; optional for deterministic-only valuation |
 | `GEMINI_MODEL` | `gemini-3.5-flash`, or your verified available model |
-| `GEMINI_TIMEOUT_SECONDS` | `30` |
+| `GEMINI_TIMEOUT_SECONDS` | `45` per-attempt I/O timeout |
+| `GEMINI_TOTAL_TIMEOUT_SECONDS` | `75` shared scheduling budget |
+| `GEMINI_MAX_RETRIES` | `2` delayed retries per model |
+| `GEMINI_BACKOFF_SECONDS` | `1` initial backoff, doubled per retry plus jitter |
 | `SEC_TIMEOUT_SECONDS` | `15` |
 | `SEC_MAX_RETRIES` | `2` |
 | `CACHE_MAX_ENTRIES` | `16` |

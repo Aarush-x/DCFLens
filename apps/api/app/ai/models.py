@@ -74,6 +74,8 @@ class ProviderRequest:
     system_instruction: str
     prompt: str
     response_schema: dict[str, Any]
+    # IDs actually sent, not every item available elsewhere in the application.
+    evidence_ids: tuple[str, ...] = ()
 
 
 class QualitativeProvider(Protocol):

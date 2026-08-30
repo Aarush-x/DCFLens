@@ -68,7 +68,7 @@ def test_gemini_client_sends_structured_output_schema_and_header() -> None:
     assert captured["timeout"] == pytest.approx(17.0, abs=0.01)
     assert http_request.get_header("X-goog-api-key") == "secret-placeholder"
     assert body["generationConfig"]["responseMimeType"] == "application/json"
-    assert body["generationConfig"]["maxOutputTokens"] == 16_384
+    assert body["generationConfig"]["maxOutputTokens"] == 4_096
     assert body["generationConfig"]["responseJsonSchema"] == request.response_schema
     assert "responseSchema" not in body["generationConfig"]
     assert request.response_schema["type"] == "object"
@@ -532,7 +532,7 @@ def test_retry_deadline_is_shared_across_models_and_reduces_socket_timeout() -> 
         raise _overloaded(request)
 
     client = GeminiClient(
-        GeminiClientConfig(api_key="test-key", model="gemini-3.5-flash"),
+        GeminiClientConfig(api_key="test-key", timeout_seconds=30, total_timeout_seconds=60),
         opener=opener, sleeper=clock.sleep, clock=clock, jitter=lambda: 0.0,
     )
     with pytest.raises(GeminiProviderError):
@@ -551,7 +551,7 @@ def test_deadline_expiring_during_backoff_prevents_another_request() -> None:
         raise _overloaded(request)
 
     def slow_sleep(delay):
-        clock.now += 61.0
+        clock.now += 76.0
 
     client = GeminiClient(
         GeminiClientConfig(api_key="test-key", model="gemini-3.5-flash"),
@@ -602,3 +602,44 @@ def test_authentication_errors_do_not_retry_or_switch_models(status) -> None:
     assert error.value.fallback_reason == "provider_authentication"
     assert len(requests) == 1
     assert clock.delays == []
+
+
+@pytest.mark.parametrize("values", [
+    {"max_retries": -1}, {"max_retries": 4}, {"max_retries": 1.5},
+    {"max_retries": True}, {"backoff_seconds": 0}, {"backoff_seconds": 11},
+    {"backoff_seconds": float("nan")}, {"backoff_seconds": float("inf")},
+    {"total_timeout_seconds": 0}, {"total_timeout_seconds": 121},
+    {"total_timeout_seconds": float("nan")}, {"total_timeout_seconds": float("inf")},
+    {"timeout_seconds": float("nan")}, {"timeout_seconds": float("inf")},
+])
+def test_invalid_recovery_configuration_is_rejected(values):
+    with pytest.raises(ValueError):
+        GeminiClient(GeminiClientConfig(api_key="test-key", **values))
+
+
+@pytest.mark.parametrize("error_kind", ["url", "connection_reset", "http_disconnect"])
+def test_transport_errors_retry_with_bounded_exponential_backoff(error_kind):
+    from http.client import RemoteDisconnected
+    from urllib.error import URLError
+
+    clock = FakeClock()
+    requests = []
+
+    def opener(request, *, timeout):
+        requests.append(request)
+        if len(requests) <= 3:
+            if error_kind == "url":
+                raise URLError("private transport details")
+            if error_kind == "http_disconnect":
+                raise RemoteDisconnected("private transport details")
+            raise ConnectionResetError("private transport details")
+        return BytesIO(b'{"candidates":[{"content":{"parts":[{"text":"{}"}]}}]}')
+
+    client = GeminiClient(
+        GeminiClientConfig(api_key="test-key", max_retries=3, backoff_seconds=0.5),
+        opener=opener, sleeper=clock.sleep, clock=clock, jitter=lambda: 0,
+    )
+    assert client.generate(ProviderRequest("system", "prompt", {})) == "{}"
+    assert len(requests) == 4
+    assert len({request.full_url for request in requests}) == 1
+    assert clock.delays == [0.5, 1, 2]

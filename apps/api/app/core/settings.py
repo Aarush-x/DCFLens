@@ -94,6 +94,18 @@ def _boolean(
     raise RuntimeError(f"{name} must be one of: {spellings}")
 
 
+def _gemini_backoff(environment: Mapping[str, str]) -> float:
+    raw_value = _clean(environment.get("GEMINI_BACKOFF_SECONDS")) or "1"
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise RuntimeError("GEMINI_BACKOFF_SECONDS must be a number between 0.1 and 10") from exc
+    # Chained comparison also rejects NaN and infinities.
+    if not 0.1 <= value <= 10:
+        raise RuntimeError("GEMINI_BACKOFF_SECONDS must be between 0.1 and 10")
+    return value
+
+
 def _user_agent(
     name: str,
     environment: Mapping[str, str],
@@ -157,6 +169,9 @@ class Settings:
     google_api_key: str | None
     gemini_model: str
     gemini_timeout_seconds: int
+    gemini_total_timeout_seconds: int
+    gemini_max_retries: int
+    gemini_backoff_seconds: float
     sec_identity: str
     cors_allowed_origins: tuple[str, ...]
     cors_allowed_origin_regex: str | None
@@ -246,8 +261,15 @@ class Settings:
             google_api_key=_clean(environment.get("GOOGLE_API_KEY")) or None,
             gemini_model=gemini_model,
             gemini_timeout_seconds=_bounded_int(
-                "GEMINI_TIMEOUT_SECONDS", 30, environment, minimum=1, maximum=120
+                "GEMINI_TIMEOUT_SECONDS", 45, environment, minimum=1, maximum=120
             ),
+            gemini_total_timeout_seconds=_bounded_int(
+                "GEMINI_TOTAL_TIMEOUT_SECONDS", 75, environment, minimum=1, maximum=120
+            ),
+            gemini_max_retries=_bounded_nonnegative_int(
+                "GEMINI_MAX_RETRIES", 2, environment, maximum=3
+            ),
+            gemini_backoff_seconds=_gemini_backoff(environment),
             sec_identity=sec_identity,
             cors_allowed_origins=origins,
             cors_allowed_origin_regex=preview_regex,

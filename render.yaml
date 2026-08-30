@@ -37,7 +37,13 @@ services:
       - key: GEMINI_MODEL
         value: gemini-3.5-flash
       - key: GEMINI_TIMEOUT_SECONDS
-        value: "30"
+        value: "45"
+      - key: GEMINI_TOTAL_TIMEOUT_SECONDS
+        value: "75"
+      - key: GEMINI_MAX_RETRIES
+        value: "2"
+      - key: GEMINI_BACKOFF_SECONDS
+        value: "1"
       - key: GOOGLE_API_KEY
         sync: false
       - key: SEC_IDENTITY

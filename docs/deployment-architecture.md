@@ -45,7 +45,10 @@ The service implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `SEC_TIME
 | `SEC_IDENTITY` | Server | Required and must contain an application name plus monitored email. |
 | `AI_PROVIDER` | Server | Explicit production provider, initially `gemini`. No implicit local fallback. |
 | `GEMINI_MODEL` | Server | Required or have a reviewed default; model changes must be observable. |
-| `GEMINI_TIMEOUT_SECONDS` | Server | Explicit bounded provider timeout; defaults to 30 seconds and may not exceed 120. |
+| `GEMINI_TIMEOUT_SECONDS` | Server | Per-attempt I/O timeout; defaults to 45 seconds, range 1–120, capped by remaining budget. |
+| `GEMINI_TOTAL_TIMEOUT_SECONDS` | Server | Shared scheduling budget across models and retries; defaults to 75 seconds, range 1–120. |
+| `GEMINI_MAX_RETRIES` | Server | Delayed transient retries per model; default 2, range 0–3, subject to the eight-request ceiling. |
+| `GEMINI_BACKOFF_SECONDS` | Server | Initial exponential backoff; default 1 second, range 0.1–10, plus up to 0.25 seconds jitter. |
 | `GOOGLE_API_KEY` | Secret | Required only when Gemini is enabled. Never logged or returned. |
 | `CORS_ALLOWED_ORIGINS` | Server | Required exact comma-separated origins. Wildcard rejected. |
 | `CORS_VERCEL_PREVIEW_PROJECT` / `CORS_VERCEL_PREVIEW_TEAM` | Server | Optional paired slugs used to derive one anchored project/team preview-origin regex. |

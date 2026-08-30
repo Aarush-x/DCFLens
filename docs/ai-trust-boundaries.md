@@ -65,6 +65,55 @@ An invalid response is not partially trusted. The result uses `DETERMINISTIC_FAL
 - Timeouts and maximum prompt/output sizes are enforced.
 - Provider responses are never logged verbatim in production.
 
+### Compact qualitative review (`compact-v1`)
+
+Gemini performs a short second opinion, not another DCF calculation or full
+checklist evaluation. Python still computes the baseline, valuation, sensitivity,
+and all ten original checklist items before any provider call.
+
+- Send at most **16** evidence items from the validated set of up to 64.
+  Evidence referenced by baseline traces is prioritized; original source order
+  breaks ties. Selection never ranks evidence by positive or negative sentiment.
+- Each selected item's content is preserved exactly, with its original ID.
+  Items over 1,000 characters are omitted rather than truncated, preventing a
+  qualifying sentence from being silently removed. Serialized evidence and its
+  source table share an **8,000-byte** JSON budget, including Unicode escaping.
+- Repeated direct SEC URLs are transmitted once in a `sources` table. Each item
+  retains a `source_index`; full original references remain unchanged in Python.
+  `review_scope` declares available, selected, and omitted counts. Selection is
+  not a complete review of the filing, and omitted evidence is not adverse evidence.
+- Python validates AI citations against **only the IDs actually transmitted**.
+  Citing a real but omitted ID is rejected just like citing an invented ID. If
+  no item fits, no provider call is made and `insufficient_evidence` preserves
+  the baseline. The evidence-support confidence factor is multiplied by selected
+  count / available count and explains this limited coverage. This is a coverage
+  penalty, not a probability of correctness or a measure of source importance.
+- Output keeps exactly three bounded adjustments, **1–3 evidence assessments**,
+  **0–3 qualitative checklist findings**, and one disagreement summary. Text is
+  capped at **240 characters per explanation**, with **1–2 citations per claim**.
+  The provider schema and Python enforce array/citation limits; short text is
+  requested via descriptions and enforced in Python (without relying on an
+  undocumented JSON-schema `maxLength` constraint). No findings means
+  no AI commentary, not a pass for the original checklist. All ten deterministic
+  checklist results remain available and unchanged.
+- `maxOutputTokens` is **4,096**, formerly 16,384. For the explicitly supported
+  `gemini-3.5-flash` and `gemini-3.5-flash-lite` models, REST `thinkingConfig` uses
+  `thinkingLevel: MINIMAL` and `includeThoughts: false`. Other configured models
+  do not receive these model-specific controls. Sampling defaults are retained.
+  [Google documents minimal thinking](https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.5)
+  for speed-oriented work; it does not guarantee that thinking is disabled.
+- `gemini_context_prepared` logs policy version, evidence counts and prompt bytes,
+  never content. Request logs include output-token limit and thinking level.
+
+On the synthetic normalized-financial-facts fixture used by the tests, the prompt
+decreased from 8,764 bytes / 24 items to 5,983 bytes / 16 items (32% fewer prompt
+bytes). Including system instruction and serialized schema, the measured content
+decreased from 11,819 to 9,897 bytes (16%). These are size measurements, not live
+latency benchmarks. Shorter output and minimal thinking may reduce analysis depth;
+provider outages, quota exhaustion, network delays, or invalid output can still
+require deterministic fallback. Truncated JSON is never repaired into a fabricated
+successful analysis. Retries remain bounded as documented below.
+
 ### Bounded Gemini recovery
 
 The REST adapter tries the configured `GEMINI_MODEL`, then the reviewed
@@ -73,22 +122,29 @@ availability, timeout, rate-limit, model-selection, or request error, or malform
 If the configured model is already `gemini-3.5-flash-lite`, it is not tried twice.
 Model switches are logged; no local AI provider is introduced.
 
-- HTTP 408, 429, 500, 502, and 503/504 and socket timeouts (including timeouts
-  wrapped in `URLError`) permit at most two delayed retries per model.
-  Delays are 1 then 2 seconds, each with 0–0.25 seconds of jitter. Schema-mode
-  changes do not reset this retry counter.
-- All attempts share an eight-request ceiling and a scheduling deadline of
-  `min(60 seconds, 2 × GEMINI_TIMEOUT_SECONDS)`. Each network attempt's timeout
-  is capped by the remaining budget. Each model gets an equal share of the
-  remaining time so slow primary retries cannot use the fallback's scheduling
-  window. With the default settings, the primary has 30 seconds and the fallback
-  receives the remaining time, up to its configured 30-second I/O timeout.
-  A primary timeout at 30 seconds therefore switches immediately to the fallback;
-  a short transient timeout can retry the primary within its window. Raising
-  `GEMINI_TIMEOUT_SECONDS` to 120 does not raise the 60-second total budget.
-  No further attempt or backoff is scheduled
-  once that budget expires. The standard-library socket timeout is an I/O
-  timeout, not a hard cancellation of a slowly streaming response.
+- HTTP 408, 429, 500, 502, and 503/504, socket timeouts (including timeouts
+  wrapped in `URLError`), and transport failures such as connection resets or
+  interrupted HTTP responses permit `GEMINI_MAX_RETRIES` delayed retries per
+  model (default 2; configurable 0–3). Delay before retry number `n`, starting
+  at 1, is `GEMINI_BACKOFF_SECONDS × 2^(n−1) + uniform(0, 0.25)` seconds.
+  The initial backoff defaults to 1 second and accepts 0.1–10 seconds. Schema
+  compatibility attempts do not reset the transient retry counter.
+- All attempts share an eight-request ceiling and one
+  `GEMINI_TOTAL_TIMEOUT_SECONDS` scheduling budget (default 75, range 1–120).
+  `GEMINI_TIMEOUT_SECONDS` is the per-attempt I/O timeout (default 45, range
+  1–120), passed explicitly to `urllib.request.urlopen`. It is capped by the
+  remaining model window and total budget. Before the primary starts, reserve
+  `min(30 seconds, remaining budget / 2)` for the reviewed fallback; when only
+  one model remains it can use all remaining time. Default primary/fallback
+  windows are therefore 45/30 seconds. A full primary timeout switches directly
+  to fallback; a short transient failure can retry the primary within its window.
+  An early primary failure leaves unused time available to the fallback.
+  Setting retries to zero disables delayed same-model retries, not the reviewed
+  model fallback or existing schema compatibility attempt. All ceilings still apply.
+  No new attempt or backoff is scheduled once its window expires. Late results
+  received after the total deadline are rejected. The standard-library socket
+  timeout is an I/O timeout, not hard cancellation of DNS resolution or a slowly
+  streaming response. Neither this setting nor retries guarantees provider uptime.
 - Authentication failures are not retried or sent to a fallback model. If both
   models time out, the unchanged deterministic valuation is returned with
   `provider_timeout`. An exhausted deadline is not evidence of a rate limit.
@@ -106,9 +162,12 @@ Model switches are logged; no local AI provider is introduced.
   `gemini_call_id` scoped to one generation, not mutable client-wide state.
   Start/failure logs record attempt number, model, effective/configured timeout,
   request byte count, schema mode, and remaining budget. Failure logs include
-  elapsed milliseconds, a safe exception type, and phase: `connection_or_headers`,
+  `request_duration_ms` (and the existing `elapsed_ms` alias), a safe exception
+  type, and phase: `connection_or_headers`,
   `response_body`, or `response_validation`. Scheduling exhaustion instead names
-  `model_deadline`, `generation_deadline`, or `attempt_limit`. Success events
+  `model_deadline`, `generation_deadline`, or `attempt_limit`. `duration_scope`
+  is `attempt` for network failure/success events; scheduling-exhaustion events
+  report total generation duration with scope `generation`. Success events
   record elapsed time, finish reason, and answer/thought token counts only.
   Never log API keys, prompts, evidence text, or generated text.
   `gemini_fallback_model_succeeded` means parseable JSON was received; only an

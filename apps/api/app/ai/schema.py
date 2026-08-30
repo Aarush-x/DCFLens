@@ -22,9 +22,11 @@ AI_ADJUSTMENT_BOUNDS: Mapping[str, tuple[float, float]] = {
     "discount_rate": (-0.015, 0.015),
 }
 MAX_PROVIDER_RESPONSE_CHARS = 65_536
-MAX_RATIONALE_CHARS = 1_000
-MAX_CLAIM_CHARS = 1_500
-MAX_EVIDENCE_IDS_PER_CLAIM = 12
+MAX_RATIONALE_CHARS = 240
+MAX_CLAIM_CHARS = 240
+MAX_EVIDENCE_IDS_PER_CLAIM = 2
+MAX_EVIDENCE_ASSESSMENTS = 3
+MAX_CHECKLIST_FINDINGS = 3
 
 
 GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
@@ -48,7 +50,7 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
                         "minimum": -0.03,
                         "maximum": 0.03,
                     },
-                    "rationale": {"type": "string"},
+                    "rationale": {"type": "string", "description": "One sentence, at most 240 characters."},
                     "evidence_ids": {
                         "type": "array",
                         "minItems": 1,
@@ -72,12 +74,12 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
         "evidence_assessment": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 20,
+            "maxItems": MAX_EVIDENCE_ASSESSMENTS,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "statement": {"type": "string"},
+                    "statement": {"type": "string", "description": "One sentence, at most 240 characters."},
                     "claim_type": {
                         "type": "string",
                         "enum": [item.value for item in ClaimType],
@@ -103,7 +105,7 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
         },
         "checklist_findings": {
             "type": "array",
-            "maxItems": 10,
+            "maxItems": MAX_CHECKLIST_FINDINGS,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -117,7 +119,7 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
                         "type": "string",
                         "enum": [item.value for item in ChecklistStatus],
                     },
-                    "explanation": {"type": "string"},
+                    "explanation": {"type": "string", "description": "One sentence, at most 240 characters."},
                     "evidence_ids": {
                         "type": "array",
                         "minItems": 1,
@@ -142,7 +144,7 @@ GEMINI_RESPONSE_SCHEMA: dict[str, Any] = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "summary": {"type": "string"},
+                "summary": {"type": "string", "description": "One sentence, at most 240 characters."},
                 "evidence_ids": {
                     "type": "array",
                     "minItems": 1,
@@ -212,7 +214,7 @@ def parse_and_validate_ai_response(
         root["evidence_assessment"],
         "evidence_assessment",
         minimum=1,
-        maximum=20,
+        maximum=MAX_EVIDENCE_ASSESSMENTS,
     )
     assessments = tuple(
         _parse_evidence_assessment(item, index, available_evidence_ids)
@@ -223,7 +225,7 @@ def parse_and_validate_ai_response(
         root["checklist_findings"],
         "checklist_findings",
         minimum=0,
-        maximum=10,
+        maximum=MAX_CHECKLIST_FINDINGS,
     )
     findings = tuple(
         _parse_checklist_finding(item, index, available_evidence_ids)

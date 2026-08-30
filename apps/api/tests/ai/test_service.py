@@ -479,3 +479,30 @@ def test_persistent_overload_preserves_deterministic_valuation() -> None:
     assert result.fallback_reason == "provider_unavailable"
     assert result.final_valuation == result.baseline_valuation
     assert all(adjustment.ai_adjustment == 0 for adjustment in result.adjustments)
+
+
+@pytest.mark.parametrize("max_retries", [0, 1, 2, 3])
+def test_timeout_exhaustion_obeys_retry_count_and_preserves_valuation(max_retries):
+    from tests.ai.test_gemini_timeouts import Clock
+
+    clock = Clock()
+    requests = []
+
+    def opener(request, *, timeout):
+        requests.append(request)
+        clock.now += 0.1
+        raise TimeoutError("not for public output")
+
+    provider = GeminiClient(
+        GeminiClientConfig(
+            api_key="test-key", model="gemini-3.5-flash-lite", max_retries=max_retries,
+        ),
+        opener=opener, sleeper=clock.sleep, clock=clock, jitter=lambda: 0,
+    )
+    result = run_qualitative_analysis(_analysis_input(), provider)
+    assert len(requests) == 1 + max_retries
+    assert clock.delays == [2 ** index for index in range(max_retries)]
+    assert result.status == AiAnalysisStatus.DETERMINISTIC_FALLBACK
+    assert result.fallback_reason == "provider_timeout"
+    assert result.final_valuation == result.baseline_valuation
+    assert all(adjustment.ai_adjustment == 0 for adjustment in result.adjustments)

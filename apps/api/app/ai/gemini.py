@@ -22,16 +22,17 @@ SAFE_PROVIDER_TOKEN_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 GOOGLE_API_KEY_PATTERN = re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b")
 MAX_PROVIDER_ERROR_BYTES = 16_384
 MAX_PROVIDER_MESSAGE_CHARS = 500
-MAX_OUTPUT_TOKENS = 16_384
+MAX_OUTPUT_TOKENS = 4_096
+# Explicit support allowlist: do not send 3.x-only controls to older/custom models.
+MINIMAL_THINKING_MODELS = frozenset({"gemini-3.5-flash", "gemini-3.5-flash-lite"})
 # Tried in order after the configured model. Must be a model that is actually
 # callable: gemini-2.5-flash was closed to new Google projects ("no longer
 # available to new users"), so as a fallback it turned every recoverable blip
 # on the primary into a hard "All reviewed Gemini models failed".
 REVIEWED_FALLBACK_MODELS = ("gemini-3.5-flash-lite",)
 RETRYABLE_HTTP_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
-MAX_TRANSIENT_RETRIES = 2
 MAX_REQUEST_ATTEMPTS = 8
-MAX_GENERATION_SECONDS = 60.0
+FALLBACK_RESERVE_SECONDS = 30.0
 logger = logging.getLogger(__name__)
 
 
@@ -72,8 +73,11 @@ class GeminiRateLimitError(GeminiProviderError):
 class GeminiClientConfig:
     api_key: str
     model: str = "gemini-3.5-flash"
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 45.0
     max_response_bytes: int = 65_536
+    max_retries: int = 2
+    backoff_seconds: float = 1.0
+    total_timeout_seconds: float = 75.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +92,7 @@ class _GeminiOutput:
 class _RequestBudget:
     deadline: float
     call_id: str
+    started_at: float
     attempts: int = 0
 
 
@@ -111,6 +116,12 @@ class GeminiClient:
             raise ValueError("Gemini model must be a safe gemini-* identifier")
         if not 0 < config.timeout_seconds <= 120:
             raise ValueError("Gemini timeout must be greater than 0 and at most 120 seconds")
+        if not 0 < config.total_timeout_seconds <= 120:
+            raise ValueError("Gemini total timeout must be greater than 0 and at most 120 seconds")
+        if type(config.max_retries) is not int or not 0 <= config.max_retries <= 3:
+            raise ValueError("Gemini max retries must be an integer between 0 and 3")
+        if not 0.1 <= config.backoff_seconds <= 10:
+            raise ValueError("Gemini backoff must be between 0.1 and 10 seconds")
         if not 1_024 <= config.max_response_bytes <= 1_048_576:
             raise ValueError("Gemini response limit must be between 1024 and 1048576 bytes")
         self._config = GeminiClientConfig(
@@ -118,6 +129,9 @@ class GeminiClient:
             model=model,
             timeout_seconds=float(config.timeout_seconds),
             max_response_bytes=config.max_response_bytes,
+            max_retries=config.max_retries,
+            backoff_seconds=float(config.backoff_seconds),
+            total_timeout_seconds=float(config.total_timeout_seconds),
         )
         self._models = tuple(dict.fromkeys((model, *REVIEWED_FALLBACK_MODELS)))
         self._opener = opener
@@ -126,19 +140,24 @@ class GeminiClient:
         self._jitter = jitter
 
     def generate(self, request: ProviderRequest) -> str:
+        started_at = self._clock()
         budget = _RequestBudget(
-            deadline=self._clock() + min(
-                MAX_GENERATION_SECONDS, 2 * self._config.timeout_seconds
-            ),
+            deadline=started_at + self._config.total_timeout_seconds,
             call_id=uuid4().hex,
+            started_at=started_at,
         )
         last_malformed_text: str | None = None
         for index, model in enumerate(self._models):
             has_fallback = index + 1 < len(self._models)
-            # Share the remaining time, not just the attempt count. A slow
-            # primary must not consume the fallback model's opportunity.
+            # Reserve fallback time without silently halving a 45s primary
+            # timeout. Small total budgets still split fairly across models.
             now = self._clock()
-            model_deadline = now + (budget.deadline - now) / (len(self._models) - index)
+            remaining_models = len(self._models) - index
+            reserve = min(
+                FALLBACK_RESERVE_SECONDS,
+                max(0, budget.deadline - now) / remaining_models,
+            ) * (remaining_models - 1)
+            model_deadline = budget.deadline - reserve
             try:
                 output = self._generate(
                     request,
@@ -243,12 +262,19 @@ class GeminiClient:
                     (
                         exc.http_status not in RETRYABLE_HTTP_STATUSES
                         and exc.fallback_reason != "provider_timeout"
+                        and not (
+                            exc.fallback_reason == "provider_unavailable"
+                            and exc.http_status is None
+                        )
                     )
-                    or transient_retries >= MAX_TRANSIENT_RETRIES
+                    or transient_retries >= self._config.max_retries
                     or budget.attempts >= MAX_REQUEST_ATTEMPTS
                 ):
                     raise
-                delay = (2 ** transient_retries) + self._jitter() * 0.25
+                delay = (
+                    self._config.backoff_seconds * (2 ** transient_retries)
+                    + self._jitter() * 0.25
+                )
                 if delay >= min(budget.deadline, model_deadline) - self._clock():
                     raise
                 transient_retries += 1
@@ -258,6 +284,7 @@ class GeminiClient:
                         "gemini_model": model,
                         "http_status": exc.http_status,
                         "retry_number": transient_retries,
+                        "max_retries": self._config.max_retries,
                         "attempt_number": budget.attempts,
                         "delay_seconds": round(delay, 3),
                         "fallback_reason": exc.fallback_reason,
@@ -269,13 +296,16 @@ class GeminiClient:
             if self._clock() >= budget.deadline:
                 self._log_budget_exhausted(model, budget, model_deadline)
                 raise GeminiTimeoutError("Gemini request budget exhausted")
+            duration_ms = round((self._clock() - attempt_started) * 1000, 2)
             logger.info(
                 "gemini_request_succeeded",
                 extra={
                     "gemini_call_id": budget.call_id,
                     "gemini_model": model,
                     "attempt_number": budget.attempts,
-                    "elapsed_ms": round((self._clock() - attempt_started) * 1000, 2),
+                    "elapsed_ms": duration_ms,
+                    "request_duration_ms": duration_ms,
+                    "duration_scope": "attempt",
                     "finish_reason": output.finish_reason,
                     "candidate_token_count": output.candidate_token_count,
                     "thought_token_count": output.thought_token_count,
@@ -296,6 +326,10 @@ class GeminiClient:
             "responseMimeType": "application/json",
             "maxOutputTokens": MAX_OUTPUT_TOKENS,
         }
+        if model in MINIMAL_THINKING_MODELS:
+            generation_config["thinkingConfig"] = {
+                "thinkingLevel": "MINIMAL", "includeThoughts": False,
+            }
         # Gemini 3.x recommends the model's default sampling settings. Forcing
         # 0.1 is not what makes the valuation deterministic (Python does that).
         if not model.startswith("gemini-3"):
@@ -341,6 +375,11 @@ class GeminiClient:
             "attempt_number": budget.attempts,
             "timeout_seconds": round(timeout_seconds, 3),
             "configured_timeout_seconds": self._config.timeout_seconds,
+            "total_timeout_seconds": self._config.total_timeout_seconds,
+            "max_retries": self._config.max_retries,
+            "backoff_seconds": self._config.backoff_seconds,
+            "max_output_tokens": MAX_OUTPUT_TOKENS,
+            "thinking_level": "MINIMAL" if model in MINIMAL_THINKING_MODELS else "model_default",
             "request_bytes": len(body),
             "schema_mode": "json_schema" if include_response_schema else "json",
         }
@@ -354,13 +393,16 @@ class GeminiClient:
         )
 
         def log_failure(reason: str, *, exception: Exception | None = None, **details: Any) -> None:
+            duration_ms = round((self._clock() - started) * 1000, 2)
             self._log_failure(
                 reason,
                 model=model,
                 diagnostics={
                     **attempt_details,
                     "phase": phase,
-                    "elapsed_ms": round((self._clock() - started) * 1000, 2),
+                    "elapsed_ms": duration_ms,
+                    "request_duration_ms": duration_ms,
+                    "duration_scope": "attempt",
                     "budget_remaining_seconds": round(max(0, budget.deadline - self._clock()), 3),
                     "error_type": type(exception).__name__ if exception is not None else None,
                 },
@@ -502,6 +544,8 @@ class GeminiClient:
                 "gemini_call_id": budget.call_id,
                 "attempt_number": budget.attempts,
                 "phase": phase,
+                "request_duration_ms": round((self._clock() - budget.started_at) * 1000, 2),
+                "duration_scope": "generation",
                 "budget_remaining_seconds": round(max(0, budget.deadline - self._clock()), 3),
             },
         )

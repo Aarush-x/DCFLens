@@ -77,7 +77,19 @@ def run_qualitative_analysis(
         deterministic_checklist,
         analysis_input.evidence,
     )
+    # Selection never changes source records. Only actually transmitted IDs can
+    # support AI claims, even if an omitted ID exists in the full SEC dataset.
+    evidence_by_id = {
+        evidence_id: evidence_by_id[evidence_id]
+        for evidence_id in provider_request.evidence_ids
+    }
+    if not evidence_by_id:
+        return _fallback_result(
+            "insufficient_evidence", baseline, baseline_valuation, deterministic_checklist,
+        )
     try:
+        # The adapter owns bounded transport retries and model fallback. Do not
+        # wrap this call in another retry loop that resets its total budget.
         response_text = provider.generate(provider_request)
     except GeminiRateLimitError:
         return _fallback_result(
@@ -319,6 +331,7 @@ def _apply_validated_response(
         validated,
         disagreements,
         fallback=False,
+        evidence_coverage=len(evidence_by_id) / max(1, len(analysis_input.evidence)),
     )
     return AiAnalysisResult(
         status=AiAnalysisStatus.APPLIED,
@@ -424,6 +437,7 @@ def _confidence(
     disagreements: tuple[ChecklistDisagreement, ...],
     *,
     fallback: bool,
+    evidence_coverage: float = 1.0,
 ) -> ConfidenceAssessment:
     stage_trace = baseline.trace_for("stage_one_growth_rate")
     discount_trace = baseline.trace_for("discount_rate")
@@ -450,7 +464,7 @@ def _confidence(
         }
         evidence_support = sum(
             support_values[item.support] for item in response.evidence_assessment
-        ) / len(response.evidence_assessment)
+        ) / len(response.evidence_assessment) * _clamp(evidence_coverage)
         adjustment_ratio = sum(
             abs(item.adjustment)
             / max(abs(AI_ADJUSTMENT_BOUNDS[item.assumption][0]), AI_ADJUSTMENT_BOUNDS[item.assumption][1])
@@ -467,7 +481,14 @@ def _confidence(
         ConfidenceFactor("cash_flow_stability", stability, "Stability score from normalized historical free cash flow."),
         ConfidenceFactor("sensitivity", sensitivity_score, "Narrower non-probabilistic valuation sensitivity receives a higher score."),
         ConfidenceFactor("terminal_value_concentration", terminal_score, "Lower terminal-value concentration receives a higher score."),
-        ConfidenceFactor("evidence_support", evidence_support, "Support quality of validated AI claims and cited evidence."),
+        ConfidenceFactor(
+            "evidence_support", evidence_support,
+            "AI unavailable; no validated qualitative evidence support." if fallback else (
+                "Support quality of validated AI claims, scaled by the fraction of available "
+                f"evidence sent for this limited review ({evidence_coverage:.0%}). "
+                "Omitted checklist findings were not AI-reviewed."
+            ),
+        ),
         ConfidenceFactor("ai_deterministic_disagreement", disagreement_score, "Smaller bounded adjustments and fewer checklist disagreements receive a higher score."),
     )
     score = sum(item.score for item in factors) / len(factors)

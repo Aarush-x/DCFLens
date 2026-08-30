@@ -406,6 +406,9 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
                 api_key=settings.google_api_key,
                 model=settings.gemini_model,
                 timeout_seconds=float(settings.gemini_timeout_seconds),
+                total_timeout_seconds=float(settings.gemini_total_timeout_seconds),
+                max_retries=settings.gemini_max_retries,
+                backoff_seconds=settings.gemini_backoff_seconds,
             )
         )
     else:
