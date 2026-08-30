@@ -1,0 +1,139 @@
+/* The sensitivity matrix, at the bottom of the Why drawer.
+
+   Scoped under .sensmatrix, and unlayered — a co-located sheet is its own PostCSS
+   entry with no `@tailwind components` directive, so `@layer components` would be
+   rejected outright. Same arrangement as WhyDrawer.css and TheNumbers.css.
+
+   There is no grid in design/index.html to port, so the parts are borrowed rather
+   than invented: the heading and gloss take .mathrow's `.k` / `.k em` treatment, the
+   cells take the mockup's mono numerals, and the tints are the `.chip2` idiom —
+   color-mix at 14% against transparent — applied to a cell instead of a chip. Every
+   colour is a token. */
+
+.sensmatrix {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hair);
+}
+
+.sensmatrix h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cream);
+}
+
+/* The gloss that buys the jargon its place — non-negotiable #1. Matches
+   .mathrow .k em exactly, because it is doing the same job one level up. */
+.sensmatrix .sensgloss {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--faint);
+  margin: 4px 0 0;
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+/* Five columns of figures plus a header column is the widest thing in the drawer.
+   It scrolls inside its own box rather than widening the pane or wrapping a row of
+   numerals onto two lines. */
+.sensmatrix .senswrap {
+  margin-top: 18px;
+  overflow-x: auto;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+}
+
+.sensmatrix .senstable {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  /* Fixed, so the corner cell's two axis labels cannot bid for width and shove the
+     row headers away from the figures they label. */
+  table-layout: fixed;
+  caption-side: bottom;
+  font-family: var(--m);
+  /* Non-negotiable #6. Twenty-five figures in a grid is exactly where proportional
+     numerals stop lining up into columns. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: 12.5px;
+}
+
+.sensmatrix .senstable th,
+.sensmatrix .senstable td {
+  padding: 10px 6px;
+  text-align: right;
+  border-bottom: 1px solid var(--hair);
+  border-right: 1px solid var(--hair);
+  white-space: nowrap;
+}
+.sensmatrix .senstable tr > :last-child { border-right: none }
+.sensmatrix .senstable tbody tr:last-child > * { border-bottom: none }
+
+/* Axis headers carry real figures, so they read at --dim rather than --faint —
+   --faint fails AA and these are numbers a reader has to compare. */
+.sensmatrix .senstable thead th,
+.sensmatrix .senstable tbody th {
+  font-weight: 400;
+  color: var(--dim);
+  background: var(--hoverbg);
+}
+/* The row and column the assumptions actually sit on. */
+.sensmatrix .senstable th.on { color: var(--cream) }
+
+/* The corner cell names both axes, so it is the one cell that is not a number —
+   hence the override of the right-alignment every other cell takes. Same specificity
+   as that rule, and after it. */
+.sensmatrix .senstable .senscorner {
+  width: 24%;
+  text-align: left;
+  font-family: var(--f);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--faint);
+}
+.sensmatrix .senscorner .axisg,
+.sensmatrix .senscorner .axisd { display: block }
+.sensmatrix .senscorner .axisd { color: var(--dim) }
+
+.sensmatrix .senstable td {
+  color: var(--cream);
+  font-weight: 500;
+}
+/* A cell the model has no answer for — the discount rate no longer clears perpetual
+   growth. An em dash, at the same weight as every other absence in the drawer. */
+.sensmatrix .senstable td.missing { color: var(--faint); font-weight: 400 }
+
+/* Price-relative tints. Present only when there IS a price; on the live payload no
+   cell carries one of these classes at all. */
+.sensmatrix .senstable td.t-under { background: color-mix(in srgb, var(--under) 14%, transparent) }
+.sensmatrix .senstable td.t-fair  { background: color-mix(in srgb, var(--fair)  14%, transparent) }
+.sensmatrix .senstable td.t-over  { background: color-mix(in srgb, var(--over)  14%, transparent) }
+
+/* The assumptions we used. An inset ring rather than a fill, so it stays legible on
+   top of whichever tint the cell already has — and so it never reads as a sixth
+   colour in a grid that is already saying something with colour. */
+.sensmatrix .senstable td.here {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--cream);
+  font-weight: 600;
+}
+
+.sensmatrix .senscap {
+  padding: 14px 2px 0;
+  text-align: left;
+  font-family: var(--f);
+  font-size: 13.5px;
+  color: var(--cream);
+}
+
+.sensmatrix .sensnote {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--faint);
+  line-height: 1.6;
+  max-width: 62ch;
+}

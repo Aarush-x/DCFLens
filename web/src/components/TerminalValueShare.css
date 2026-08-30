@@ -1,0 +1,79 @@
+/* TerminalValueShare — the two-part bar in the Why layer.
+ *
+ * No new visual language: the bar is the mockup's own track/band relationship from
+ * design/index.html (.track on var(--trackbg), .band on var(--bandbg)) laid end to
+ * end instead of overlaid, and the head row is a .mathrow's k/v split with the same
+ * type sizes and the same gloss treatment. Every colour is a token.
+ *
+ * Unlayered, like RangeBar.css / WhyDrawer.css / TheNumbers.css — a co-located sheet
+ * is its own PostCSS entry and carries no `@tailwind components` directive. */
+
+.tvshare { margin-top: 24px }
+
+/* Same 14px / 13px pairing as .mathrow, so this reads as one more row of the drawer
+   rather than as a panel dropped into it. */
+.tvshare .tvhead {
+  display: flex; justify-content: space-between; gap: 20px; align-items: baseline;
+  font-size: 14px;
+}
+.tvshare .tvhead .k { color: var(--cream); font-weight: 500 }
+.tvshare .tvhead .k em {
+  display: block; font-style: normal; font-weight: 400; font-size: 13px;
+  color: var(--faint); margin-top: 3px; max-width: 46ch; line-height: 1.5;
+}
+/* var(--m) plus the inherited tabular figures — non-negotiable #6. */
+.tvshare .tvhead .v {
+  font-family: var(--m); font-weight: 600; white-space: nowrap; color: var(--cream);
+}
+/* Above three quarters the headline share carries the caution colour with the bar.
+   var(--fair), never var(--over): a caution, not a failure. */
+.tvshare.heavy .tvhead .v { color: var(--fair) }
+
+.tvshare .tvbar {
+  display: flex; height: 6px; margin-top: 16px; border-radius: 3px;
+  background: var(--trackbg); overflow: hidden;
+}
+.tvshare .tvbar .seg { height: 100%; transition: width .45s ease }
+
+/* Solidity reads as certainty. The forecast years are filed-figure-driven and take
+   the brighter fill; the terminal half is the assumption and stays quieter — until
+   it is carrying most of the answer, when it takes var(--fair). */
+.tvshare .seg.near, .tvshare .sw.near { background: var(--dim) }
+.tvshare .seg.far,  .tvshare .sw.far  { background: var(--bandbg) }
+.tvshare.heavy .seg.far, .tvshare.heavy .sw.far { background: var(--fair) }
+
+.tvshare .tvkey { margin-top: 14px }
+.tvshare .tvk {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 0; font-size: 13.5px;
+}
+/* Same 6px round pip the mockup's claim cards use, so a swatch here and a pip on a
+   plain-English card read as the same mark. */
+.tvshare .tvk .sw {
+  flex: none; width: 6px; height: 6px; border-radius: 50%; transform: translateY(-1px);
+}
+.tvshare .tvk .n { color: var(--dim) }
+/* Pushed to the right edge of the drawer, so the two amounts line up under one
+   another and read as a sum. */
+.tvshare .tvk .v {
+  margin-left: auto; font-family: var(--m); font-weight: 600; white-space: nowrap;
+  color: var(--cream);
+}
+
+.tvshare .tvgloss,
+.tvshare .tvflag {
+  font-size: 13px; line-height: 1.6; max-width: 52ch; margin: 12px 0 0;
+}
+.tvshare .tvgloss { color: var(--dim) }
+/* The caution sits on its own hairline so it reads as an added remark rather than a
+   second sentence of the gloss. The colour is carried by the pip, the bar and the
+   headline share — a whole paragraph in var(--fair) would shout where the mockup
+   only ever marks. */
+.tvshare .tvflag {
+  color: var(--dim); margin-top: 12px; padding-top: 13px;
+  border-top: 1px solid var(--hair);
+}
+.tvshare .tvflag .pip {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--fair); margin-right: 9px; transform: translateY(-1px);
+}

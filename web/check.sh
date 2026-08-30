@@ -3,8 +3,10 @@
 #   build → dev server → headless load → console must be clean → 3 screenshots
 # Exits non-zero on the first failure. Artifacts land in web/.checks/<timestamp>/.
 #
-# CHECK_STRICT=1 turns a missing mock into a hard failure. Leave it unset while
-# src/mocks/msft-live.json is still owed by batch 1A.2.
+# A missing mock is a hard failure. Every fixture the gate shoots is committed, so
+# an absent one means a bad checkout or a deleted file, not work still owed --
+# warning about it would let the gate go green on screenshots it never took.
+# CHECK_STRICT=0 downgrades that to a warning; nothing in CI should set it.
 
 set -euo pipefail
 
@@ -15,7 +17,7 @@ PORT="${PORT:-5199}"
 BASE="http://127.0.0.1:${PORT}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT=".checks/${STAMP}"
-STRICT="${CHECK_STRICT:-0}"
+STRICT="${CHECK_STRICT:-1}"
 
 RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; OFF=$'\033[0m'
 ok()   { printf '%s✓%s %s\n' "$GRN" "$OFF" "$1"; }
@@ -86,17 +88,24 @@ shoot() {
 
 printf '\n── screenshots ──\n'
 
-# 3. live MSFT envelope. Owned by 1A.2; until it lands this shoots the
-#    payload-unavailable state instead of a fabricated response.
-if [ -f src/mocks/msft-live.json ]; then
-  shoot "1-msft-live" "mock=msft"
-else
-  if [ "$STRICT" = "1" ]; then
-    die "src/mocks/msft-live.json missing (CHECK_STRICT=1)"
+# require <mock-file> <name> <query> — shoot a state whose fixture must exist.
+# Strict by default: a missing capture fails the run rather than quietly shooting
+# the payload-unavailable screen and calling it the state it was meant to cover.
+require() {
+  local file="$1" name="$2" query="$3"
+  if [ -f "$file" ]; then
+    shoot "$name" "$query"
+    return
   fi
-  warn "src/mocks/msft-live.json not committed yet (batch 1A.2) — run is PROVISIONAL"
-  shoot "1-msft-live-MISSING" "mock=msft"
-fi
+  if [ "$STRICT" = "1" ]; then
+    die "$file missing — cannot shoot $name (CHECK_STRICT=0 to downgrade)"
+  fi
+  warn "$file missing — run is PROVISIONAL"
+  shoot "${name}-MISSING" "$query"
+}
+
+# 3. live MSFT envelope, straight off the API.
+require src/mocks/msft-live.json "1-msft-live" "mock=msft"
 
 # 4. the cannot-value path
 shoot "2-cannot-value" "mock=novalue"

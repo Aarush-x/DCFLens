@@ -10,7 +10,7 @@ import WhyDrawer from '../WhyDrawer.jsx'
 import EvidenceProvider from '../EvidenceProvider.jsx'
 import TheNumbers from '../TheNumbers.jsx'
 import SourceRecord from '../SourceRecord.jsx'
-import RecentRail, { seedHistory, pushHistory, nameFor } from './RecentRail.jsx'
+import RecentRail, { loadHistory, saveHistory, pushHistory, nameFor } from './RecentRail.jsx'
 import TopBar from './TopBar.jsx'
 import SearchState from './SearchState.jsx'
 import SourcesFooter from './SourcesFooter.jsx'
@@ -68,9 +68,16 @@ export function resolveTicker(query) {
 export default function AppScreen({ onBack }) {
   const params = readParams()
 
-  /* The mockup's HISTORY array, lifted into React. Seeded — see RecentRail.jsx
-     for why that departs from design/index.html. */
-  const [history, setHistory] = useState(seedHistory)
+  /* The mockup's HISTORY array, lifted into React. Starts as whatever the last
+     visit left behind — empty on a first visit, which is the designed state and
+     not a gap. See RecentRail.jsx. Passed by reference so it runs once, on mount,
+     rather than reading storage on every render. */
+  const [history, setHistory] = useState(loadHistory)
+
+  /* Persist on every change. This is the only writer, so the rail cannot drift
+     from what is stored: whatever React holds after a search, a rename or a
+     reorder is what the next visit reads back. */
+  useEffect(() => { saveHistory(history) }, [history])
 
   /* `?state=result` (and `?ticker=`, and check.sh's `?mock=`) skip the search state.
      A capture with no ticker of its own selects nothing in particular — useAnalysis
@@ -92,7 +99,7 @@ export default function AppScreen({ onBack }) {
 
      Only rows still showing their own symbol are touched. What the API returns is
      the SEC registrant name — "MICROSOFT CORP", "COSTCO WHOLESALE CORP /NEW" —
-     which is worse to read than the curated one a seeded row already carries.
+     which is worse to read than the curated one nameFor already supplied.
      Naming an unnamed row is a gain; shouting over a named one is not. The guard
      also stops this from looping. */
   useEffect(() => {
@@ -237,7 +244,7 @@ function Analysis({ data }) {
             <AiFallbackNotice data={data} />
             <PlainEnglish items={data.plain_english} data={data} />
             {/* The second layer. The ONLY place jargon is allowed, and only glossed. */}
-            <WhyDrawer math={data.the_math} />
+            <WhyDrawer math={data.the_math} checks={data.checks} price={data.price?.current ?? null} />
           </div>
           <TheNumbers data={data} />
         </div>

@@ -13,10 +13,20 @@ from app.core.settings import Settings
 from app.main import create_app
 from app.data.sec import normalize_company_facts
 from app.data.sec.models import CompanySubmissionProfile, TickerResolution
+from app.data.market.models import MarketPrice, QuoteUnavailableReason
 from app.services.analysis import AnalysisService, CompanyData, _build_analysis_input
 from app.services.cache import MemoryCache
 from app.services.errors import MissingSecDataError
 from tests.fixtures.sec.company_facts import technology_company
+
+
+def _offline_prices():
+    """No quote provider, so these fixture tests stay offline and deterministic."""
+    price = MarketPrice.unavailable(
+        QuoteUnavailableReason.PROVIDER_DISABLED,
+        "We aren't showing a market price right now.",
+    )
+    return SimpleNamespace(price_for=lambda ticker: price)
 
 
 def company_data():
@@ -44,11 +54,12 @@ def test_single_fcf_year_can_return_deterministic_valuation():
         normalized_cache=MemoryCache(max_entries=8, ttl_seconds=60),
         deterministic_cache=MemoryCache(max_entries=8, ttl_seconds=60),
         analysis_cache=MemoryCache(max_entries=8, ttl_seconds=60),
+        prices=_offline_prices(),
     )
-    result = service.analyze("aapl")
-    assert result.analysis.status is AiAnalysisStatus.DETERMINISTIC_FALLBACK
-    assert result.analysis.final_valuation.intrinsic_value_per_share > 0
-    assert result.analysis.final_valuation.fcf_stability is None
+    core = service.analyze("aapl").core
+    assert core.analysis.status is AiAnalysisStatus.DETERMINISTIC_FALLBACK
+    assert core.analysis.final_valuation.intrinsic_value_per_share > 0
+    assert core.analysis.final_valuation.fcf_stability is None
 
 
 @pytest.mark.parametrize("metric", ["total_debt", "cash_and_short_term_investments", "diluted_average_shares"])
@@ -100,6 +111,7 @@ def test_complete_sec_to_ai_to_http_pipeline_and_completed_cache():
         normalized_cache=MemoryCache(max_entries=8, ttl_seconds=60),
         deterministic_cache=MemoryCache(max_entries=8, ttl_seconds=60),
         analysis_cache=MemoryCache(max_entries=8, ttl_seconds=60),
+        prices=_offline_prices(),
     )
     application = create_app(Settings.from_env({}))
     application.state.analysis_service = service

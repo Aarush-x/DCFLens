@@ -1,7 +1,7 @@
 /* The seam.
  *
- * The frontend is designed against docs/API.md v2 (see src/mocks/aapl.json — that
- * file IS the contract). The API returns the FastAPI `AnalysisEnvelope`, which is a
+ * The frontend is designed against docs/API.md (see src/mocks/aapl.json — that file
+ * IS the contract). The API returns the FastAPI `AnalysisEnvelope`, which is a
  * different, deeper, snake_case shape (see src/mocks/msft-live.json — a byte-for-byte
  * capture of GET /api/analyze/MSFT on 2026-08-30).
  *
@@ -9,33 +9,70 @@
  * the raw envelope. If a number is wrong on screen, it is wrong here.
  *
  * ── What toView returns ───────────────────────────────────────────────────────
- * The docs/API.md v2 object the 1B components already read (`verdict`, `price`,
+ * The docs/API.md object the 1B components already read (`verdict`, `price`,
  * `plain_english`, `the_math`, `checks`, `sources`), PLUS the named fields the 1A.2
  * spec lists ("map at minimum"): companyName, retrievedAt, filing.*, value.*,
  * confidence.*, evidence, aiStatus. Both surfaces describe the same data; the
  * camelCase half is the spec's vocabulary, the snake_case half is what the
  * components were built against. Neither is derived at render time.
  *
- * ── The price gap (product non-negotiable #3) ─────────────────────────────────
- * THE ENVELOPE CARRIES NO MARKET PRICE. The service is SEC/XBRL-only; there is no
- * quote provider. So `price.current` is `null`, always, and never 0.
+ * ── The price, and the gate on the verdict (docs/API.md v3) ───────────────────
+ * The envelope carries two v3 keys — `market_price` and `plausibility` — and
+ * between them they settle everything on this screen that is defined as price
+ * against value. THREE STATES, three different things to say:
  *
- * Everything that is *defined* as price-vs-value is therefore null too, and says so:
- *   - verdict.label            (UNDERVALUED / FAIRLY_PRICED / OVERVALUED is a
- *                               comparison; with one side missing there is no word)
- *   - verdict.combination      (five of its six legal strings encode a price judgment)
- *   - margin_of_safety_pct     ((mid − current) / current)
- *   - what_has_to_be_true.implied_growth_pct  (solved against the price)
- * Each carries `unavailable_reason: 'no_market_price'` so the UI can state the gap
- * rather than render an em dash and leave the user guessing.
+ *   1. PRICE PRESENT, GATE OPEN  — `market_price.status` is AVAILABLE and
+ *      `plausibility.can_state_verdict` is true.
+ *      The full designed verdict. `price.current` is the quoted price,
+ *      `verdict.label` is one of the three words, `margin_of_safety_pct` is
+ *      computed against it at last, and nothing carries an unavailable_reason.
  *
- * What survives the gap is real and renders today: the valuation range, the
- * checklist, the math, the filing provenance, and `verdict.business_quality` —
- * which docs/API.md defines as "the quality axis, independent of price".
+ *   2. PRICE PRESENT, GATE CLOSED — `can_state_verdict` is false.
+ *      The price is real and renders; so does the range. THE WORD DOES NOT.
+ *      `verdict.label` is null and stamped `VERDICT_WITHHELD`, and the margin of
+ *      safety goes with it — a signed percentage against a price we have just said
+ *      we will not rank is the same verdict said in numbers. `plausibility.summary`
+ *      and `reasons[].explanation` are the backend's own beginner-readable
+ *      sentences and are carried across verbatim, so the screen explains the
+ *      refusal in the words the gate was written in rather than inventing its own.
+ *
+ *   3. PRICE ABSENT — `status: "UNAVAILABLE"`, or the key missing altogether.
+ *      Invariant 1 says those two degrade IDENTICALLY, which is what let this
+ *      adapter ship before the quote provider did. `price.current` is null and
+ *      never 0, and every field *defined* as price-vs-value is null with it:
+ *        - verdict.label            (a word is a comparison; one side is missing)
+ *        - verdict.combination      (five of its six legal strings judge a price)
+ *        - margin_of_safety_pct     ((mid − current) / current)
+ *        - implied_growth_pct       (solved against the price)
+ *      Each carries `unavailable_reason: NO_PRICE` so the UI can state the gap
+ *      rather than render an em dash and leave the user guessing.
+ *
+ * THE GATE IS NEVER RE-DERIVED HERE. `can_state_verdict` is read and obeyed. No
+ * threshold is copied, no ratio recomputed, and `final_valuation.warnings` is never
+ * consulted to second-guess it. The thresholds live in the backend (D-027) so they
+ * cannot drift into two languages, and so a refusal cannot be bypassed by pointing
+ * a different client at the API. `level`, `price_to_midpoint_ratio`,
+ * `price_position` and `reasons[]` come across for EXPLAINING the gate to a reader,
+ * never for computing it. The one thing this file derives from position is *which*
+ * of the three words to use once the gate has already opened — and even that reads
+ * the backend's `price_position` first.
+ *
+ * Invariant 8, and the oldest rule in this codebase: never invent a price. Not 0,
+ * not the range midpoint, not a stale quote wearing today's date.
+ *
+ * What survives all three states is real and renders regardless: the valuation
+ * range, the checklist, the math, the filing provenance, and
+ * `verdict.business_quality` — which docs/API.md defines as "the quality axis,
+ * independent of price".
  */
 
-/** Why a price-dependent field is null. */
+/** Why a price-dependent field is null. Three different facts, never blended:
+ *  "we have no price", "we have a price and will not rank it", and "we have a
+ *  price but do not solve this particular number from it" are three different
+ *  things to tell a beginner, and the middle one is the hardest. */
 export const NO_PRICE = 'no_market_price'
+export const VERDICT_WITHHELD = 'verdict_withheld'
+export const IMPLIED_GROWTH_UNSOLVED = 'implied_growth_not_solved'
 
 /** aiStatus values. A string, not an object, so useAnalysis's `?status=` URL
  *  override (`params.status || data.aiStatus`) keeps working unchanged. The
@@ -417,6 +454,106 @@ export function historicalGrowthPct(series) {
   return ((last / first) ** (1 / years) - 1) * 100
 }
 
+/* ── where the value comes from ─────────────────────────────────────────────── */
+
+/** The present values of the ten projected years, when `decomposition` does not
+ *  state their sum. Null unless every year carries one — a partial sum would
+ *  understate the near-term half and overstate the terminal share, which is the
+ *  exact direction this block must never be wrong in. */
+function sumPresentValues(rows) {
+  const vals = arr(rows).map((r) => num(r?.present_value))
+  if (!vals.length || vals.some((v) => v === null)) return null
+  return vals.reduce((a, b) => a + b, 0)
+}
+
+/**
+ * The terminal-value split, for TerminalValueShare.jsx.
+ *
+ * `terminal_value_pct` above already carries the engine's own
+ * `terminal_value.concentration`, but one number cannot draw a two-part bar. The
+ * envelope states both halves outright, in `decomposition`:
+ *
+ *   present_value_projected_cash_flows + present_value_terminal_value = enterprise_value
+ *
+ * so both are carried across, and the share is computed FROM that pair rather than
+ * read off `concentration` — a percentage derived from the same two numbers the bar
+ * is drawn from cannot disagree with the bar. `concentration` is the fallback for an
+ * envelope that omits the decomposition; then the two amounts are null and the
+ * component draws from the share alone.
+ *
+ * Returns null when there is no honest share to state: no enterprise value to take
+ * a share of, or a total that is zero or negative.
+ */
+function toTerminalValue(fv) {
+  const tv = fv?.terminal_value ?? {}
+  const d = fv?.decomposition ?? {}
+
+  const beyond = num(d.present_value_terminal_value) ?? num(tv.present_value)
+  const projected =
+    num(d.present_value_projected_cash_flows) ?? sumPresentValues(fv?.projected_cash_flows)
+
+  const total = beyond === null || projected === null ? null : beyond + projected
+  // A share needs a whole to be a share of.
+  if (total !== null && total <= 0) return null
+
+  const share = total !== null ? (beyond / total) * 100 : toPct(tv.concentration)
+  if (share === null) return null
+
+  return {
+    share_pct: share,
+    // Both amounts, or neither: one figure beside an em dash in a two-line legend
+    // reads as a missing number rather than as a split we could not resolve.
+    present_value: total === null ? null : beyond,
+    projected_present_value: total === null ? null : projected,
+    total_present_value: total,
+  }
+}
+
+/* ── sensitivity ────────────────────────────────────────────────────────────── */
+
+/**
+ * The published sensitivity interval, for SensitivityMatrix.jsx.
+ *
+ * `final_valuation.sensitivity_interval` is the engine's own answer to "how much do
+ * our assumptions matter": it re-runs the DCF with growth shifted −δ and the discount
+ * rate shifted +δ (the pessimistic corner), and again the other way (the optimistic
+ * corner). Its `evaluated_points` carry ONLY those two corners plus nothing in
+ * between, so the matrix cannot be read off the envelope — it is rebuilt from these
+ * deltas and the assumptions the drawer already shows, then checked back against
+ * these three published figures. See SensitivityMatrix.jsx.
+ *
+ * Deltas arrive as decimal fractions (`units.rates`) and leave as percentage points,
+ * matching every other rate in `the_math`. Returns null unless the interval is
+ * complete and both deltas are positive — a zero delta describes no interval at all,
+ * and a grid built on it would be one number printed twenty-five times.
+ */
+function toSensitivity(fv) {
+  const si = fv?.sensitivity_interval
+  if (!si) return null
+
+  const growth = toPct(si.growth_rate_delta)
+  const discount = toPct(si.discount_rate_delta)
+  if (growth === null || discount === null || growth <= 0 || discount <= 0) return null
+
+  const central = num(si.central_value_per_share) ?? num(fv.intrinsic_value_per_share)
+  const low = num(si.lower_bound_per_share)
+  const high = num(si.upper_bound_per_share)
+  if (central === null || low === null || high === null) return null
+
+  return {
+    method: str(si.method),
+    // The engine states this outright, and it is false: the bounds are a
+    // perturbation, not a confidence interval. Carried so no component can imply
+    // a probability the envelope never claimed.
+    is_probability_interval: si.is_probability_interval === true,
+    growth_delta_pct: growth,
+    discount_delta_pct: discount,
+    central_per_share: central,
+    low_per_share: low,
+    high_per_share: high,
+  }
+}
+
 function toTheMath(fv, analysis, filing) {
   if (!fv) return null
   const inputs = fv.inputs ?? {}
@@ -438,8 +575,10 @@ function toTheMath(fv, analysis, filing) {
     terminal_growth_pct: toPct(a.terminal_growth_rate),
     discount_rate_pct: toPct(a.discount_rate),
     terminal_value_pct: toPct(fv.terminal_value?.concentration),
+    terminal_value: toTerminalValue(fv),
     net_debt: num(inputs.net_debt),
     shares_outstanding: num(inputs.diluted_shares),
+    sensitivity: toSensitivity(fv),
     scenarios: [
       { name: 'Pessimistic', value_per_share: num(si.lower_bound_per_share), growth_pct: shift(-1) },
       { name: 'Realistic', value_per_share: num(fv.intrinsic_value_per_share), growth_pct: stageOne },
@@ -510,6 +649,14 @@ export function toCannotValue(envelope = {}) {
   const code = str(err.code) ?? 'calculation_error'
   const filing = envelope?.latest_filing ?? null
 
+  /* A refusal to value is not a refusal to show the price. When the envelope
+     carries a quote — a 200 that produced no valuation still can — the price card
+     prints it and the estimate beside it stays an em dash, which is the designed
+     refusal in design/app.html rather than a blank screen. No valuation means no
+     comparison, so there is still no word and no margin of safety. */
+  const market = toMarketPrice(envelope?.market_price)
+  const plausibility = toPlausibility(envelope?.plausibility)
+
   return {
     ticker: str(envelope?.ticker) ?? null,
     company_name: str(envelope?.company_name) ?? null,
@@ -527,13 +674,22 @@ export function toCannotValue(envelope = {}) {
       detail: str(err.message) ?? CANNOT_VALUE_MESSAGES[code] ?? null,
     },
 
-    price: { current: null, fair_value_low: null, fair_value_mid: null, fair_value_high: null },
+    price: {
+      current: market.current,
+      fair_value_low: null,
+      fair_value_mid: null,
+      fair_value_high: null,
+      unavailable_reason: market.current === null ? NO_PRICE : null,
+      verdict_withheld: false,
+      quote: market.quote,
+      unavailable_message: market.message,
+    },
     plain_english: [],
     what_has_to_be_true: null,
     falsifiers: [],
     the_math: null,
     checks: [],
-    sources: sourcesFor(filing),
+    sources: sourcesFor(filing, market.quote),
 
     // named 1A.2 surface
     companyName: str(envelope?.company_name) ?? null,
@@ -545,11 +701,136 @@ export function toCannotValue(envelope = {}) {
     aiStatus: AI_OK,
     aiFallbackReason: null,
 
-    priceAvailable: false,
+    plausibility,
+
+    priceAvailable: market.current !== null,
+    canStateVerdict: false,
     canValue: false,
     errorCode: code,
     requestId: str(err.request_id) ?? null,
   }
+}
+
+/* ── market price and the plausibility gate (docs/API.md v3) ────────────────── */
+
+/**
+ * `market_price`, read defensively.
+ *
+ * Invariant 1: the key is always present, and absence is `status: "UNAVAILABLE"`
+ * with a reason — never a missing key, never null, never 0. A missing key must
+ * degrade IDENTICALLY to UNAVAILABLE, which is exactly what makes this safe to run
+ * against a backend that has not shipped its quote provider: anything that is not a
+ * well-formed AVAILABLE quote is read as no price at all.
+ *
+ * Invariant 2 promises an AVAILABLE quote always carries a positive number. This
+ * checks anyway. A zero or a negative from a provider is the one figure that must
+ * never reach the screen (invariant 8), and the check costs nothing.
+ *
+ * @returns {{current: number|null, quote: object|null, message: string|null,
+ *            reason: string|null}}
+ */
+export function toMarketPrice(mp) {
+  const quoted = num(mp?.quote?.price)
+  if (str(mp?.status) !== 'AVAILABLE' || quoted === null || quoted <= 0) {
+    return {
+      current: null,
+      quote: null,
+      // The backend's own one-sentence explanation, written for a beginner and
+      // safe to render verbatim. Null when the key is absent entirely — then it
+      // said nothing, and we do not put words in its mouth.
+      message: str(mp?.message),
+      reason: str(mp?.unavailable_reason),
+    }
+  }
+  const q = mp.quote
+  return {
+    current: quoted,
+    /* `quoted_at` and `retrieved_at` are two different facts and both are carried:
+       a price quoted on Friday and fetched on Sunday is stale, and only the pair
+       says so. Neither is ever inferred from the other. */
+    quote: {
+      symbol: str(q.symbol),
+      currency: str(q.currency),
+      quotedAt: str(q.quoted_at),
+      retrievedAt: str(q.retrieved_at),
+      source: str(q.source),
+      sourceUrl: str(q.source_url),
+      exchangeName: str(q.exchange_name),
+    },
+    message: null,
+    reason: null,
+  }
+}
+
+/**
+ * `plausibility`, carried across and never recomputed.
+ *
+ * Everything here except `canStateVerdict` exists to EXPLAIN the gate to a reader.
+ * `canStateVerdict` is the gate itself, and it is read, not derived — see the
+ * header and D-027.
+ */
+export function toPlausibility(pl) {
+  return {
+    /* Lets a consumer tell "the backend closed the gate" from "this response
+       predates v3". Both withhold the word; only the first has sentences to show
+       for it, and a screen that says nothing is better than one that improvises. */
+    stated: Boolean(pl) && typeof pl === 'object' && !Array.isArray(pl),
+    level: str(pl?.level),
+    /* `=== true`, and nothing looser. A missing key, a null, a truthy string —
+       all of them mean we have not been told we may say a word, and the default
+       on "not been told" is silence. */
+    canStateVerdict: pl?.can_state_verdict === true,
+    reasons: arr(pl?.reasons)
+      .map((r) => ({
+        signal: str(r?.signal),
+        /* Severity is the only field a component may branch on. `signal` is an
+           open vocabulary by contract — switching on it breaks the first time the
+           backend names a new one. */
+        severity: str(r?.severity),
+        explanation: str(r?.explanation),
+      }))
+      .filter((r) => r.explanation),
+    priceToMidpointRatio: num(pl?.price_to_midpoint_ratio),
+    pricePosition: str(pl?.price_position),
+    summary: str(pl?.summary),
+  }
+}
+
+const LABEL_FOR = {
+  below_range: 'UNDERVALUED',
+  in_range: 'FAIRLY_PRICED',
+  above_range: 'OVERVALUED',
+}
+
+/**
+ * WHICH of the three words, once the gate has already said one may be said.
+ *
+ * This is not the gate and not a threshold. `price_position` is the backend's own
+ * statement of where the price falls and is used wherever it exists; the fallback
+ * is the comparison that position is *defined* as in docs/API.md — below
+ * `fair_value_low`, between the bounds inclusive, above `fair_value_high`.
+ *
+ * Null when there is no range to place the price in: a word needs both sides.
+ */
+function verdictLabel(position, current, low, high) {
+  const stated = LABEL_FOR[position]
+  if (stated) return stated
+  if (current === null || low === null || high === null) return null
+  if (current < low) return 'UNDERVALUED'
+  if (current > high) return 'OVERVALUED'
+  return 'FAIRLY_PRICED'
+}
+
+/** docs/API.md: `(mid − current) / current × 100`. Positive = cheap. */
+function marginOfSafetyPct(mid, current) {
+  if (mid === null || current === null || current <= 0) return null
+  return ((mid - current) / current) * 100
+}
+
+const HEADLINE_FOR = {
+  UNDERVALUED: 'looks cheap against what the filings support',
+  FAIRLY_PRICED: 'looks fairly priced against what the filings support',
+  OVERVALUED: 'looks expensive against what the filings support',
 }
 
 /* ── filing / sources ───────────────────────────────────────────────────────── */
@@ -567,10 +848,12 @@ function toFiling(filing) {
   }
 }
 
-/* Only sources actually used. Yahoo Finance appears in docs/API.md's example, but
- * this service makes no quote call — listing it would claim provenance we do not
- * have, on the very screen that has no price. */
-function sourcesFor(filing) {
+/* Only sources actually used. The quote line appears if and only if there was a
+ * quote: the mockup's "Yahoo Finance — price & financials" is a provenance claim,
+ * and on a response with no price it would be a false one. Named from the quote's
+ * own `source` and `source_url` rather than from a constant, so the footer credits
+ * whichever provider actually answered. */
+function sourcesFor(filing, quote) {
   const out = []
   const url = str(filing?.filing_url)
   if (url) {
@@ -579,6 +862,9 @@ function sourcesFor(filing) {
     out.push({ label: `SEC EDGAR — ${form}${year ? ` (FY${year})` : ''}`, url })
   }
   out.push({ label: 'SEC EDGAR — XBRL company facts', url: 'https://www.sec.gov/edgar' })
+  if (quote?.source) {
+    out.push({ label: `${quote.source} — share price`, url: quote.sourceUrl ?? null })
+  }
   return out
 }
 
@@ -622,6 +908,32 @@ export function toView(envelope) {
   const aiFailed = str(analysis?.status) === 'DETERMINISTIC_FALLBACK'
   const histGrowth = historicalGrowthPct(fv.inputs?.historical_free_cash_flows)
 
+  /* ── the price and the gate ─────────────────────────────────────────────────
+     Read, in this order and no other: is there a price, and are we allowed to say
+     a word about it. The second question is answered by the backend and this file
+     does not have an opinion on it. See the header. */
+  const market = toMarketPrice(envelope.market_price)
+  const plausibility = toPlausibility(envelope.plausibility)
+  const current = market.current
+  const hasPrice = current !== null
+
+  // Invariant 5: the word is printed if and only if `can_state_verdict` is true.
+  const gateOpen = hasPrice && plausibility.canStateVerdict
+  const label = gateOpen ? verdictLabel(plausibility.pricePosition, current, low, high) : null
+
+  /* One expression, all three states. No price -> NO_PRICE. A price and a word ->
+     nothing is missing. A price and no word -> VERDICT_WITHHELD, which covers both
+     a gate the backend closed and the rarer case of a valuation with no range to
+     place the price in. A null label always carries a reason for being null. */
+  const verdictReason = !hasPrice ? NO_PRICE : label ? null : VERDICT_WITHHELD
+
+  /* Computable at last — but only with the word. A signed percentage against a
+     price we have just declined to rank is the same verdict said in numbers, and
+     the gate does not distinguish between the two. */
+  const mos = label ? marginOfSafetyPct(mid, current) : null
+
+  const companyLabel = str(envelope.company_name) ?? str(envelope.ticker) ?? 'this company'
+
   return {
     /* ── docs/API.md v2 surface — what the 1B components read ───────────────── */
     ticker: str(envelope.ticker),
@@ -630,39 +942,67 @@ export function toView(envelope) {
     as_of: dateOnly(envelope.sec_retrieved_at),
 
     verdict: {
-      // Null, not a guess. UNDERVALUED / FAIRLY_PRICED / OVERVALUED is a statement
-      // about price vs value, and there is no price. The UI must say so.
-      label: null,
-      headline: `We valued ${str(envelope.company_name) ?? str(envelope.ticker) ?? 'this company'}, but we don't have today's share price to compare it against`,
+      /* A word, or null and a reason. Never a guess: UNDERVALUED / FAIRLY_PRICED /
+         OVERVALUED is a statement about price against value, and it is said only
+         when we have both halves AND the backend has opened the gate. */
+      label,
+      headline: label
+        ? `${companyLabel} ${HEADLINE_FOR[label]}`
+        : hasPrice
+          /* The gate's own sentence, written for a beginner by the side that
+             closed it. Falls back to plain words when a pre-v3 response leaves us
+             with a price and no gate to read. */
+          ? (plausibility.summary ??
+             `We valued ${companyLabel}, but our estimate sits too far from today's price for us to call it`)
+          : `We valued ${companyLabel}, but we don't have today's share price to compare it against`,
       confidence: level,
-      margin_of_safety_pct: null,
-      // Independent of price by definition, so it still resolves.
+      margin_of_safety_pct: mos,
+      // Independent of price by definition, so it resolves in every state.
       business_quality: quality,
-      // Five of the six legal strings encode a price judgment; the sixth
-      // ("Insufficient evidence") would misdescribe a valuation that succeeded.
+      /* Left to VerdictBanner, which owns the closed set and renders both axes; it
+         reads a contract string here when one is sent and derives the pair
+         otherwise. Never derived from the quality axis alone — five of the six
+         legal strings encode a price judgment. */
       combination: null,
-      unavailable_reason: NO_PRICE,
+      unavailable_reason: verdictReason,
     },
 
     price: {
-      current: null, // never 0 — see the header
+      current, // the quoted price, or null — never 0, never the midpoint
       fair_value_low: low,
       fair_value_mid: mid,
       fair_value_high: high,
-      unavailable_reason: NO_PRICE,
+      unavailable_reason: hasPrice ? null : NO_PRICE,
+      /* Additive, and the only channel RangeBar has: it is handed the price object
+         and nothing else. With the gate closed it must place the marker WITHOUT
+         the three zone words beneath it — a knob sitting inside "Looks expensive"
+         states in a picture the word we have just refused to say. */
+      verdict_withheld: verdictReason === VERDICT_WITHHELD,
+      // Where the quote came from, and — when there is none — the backend's own
+      // sentence saying why. Both null in the other state.
+      quote: market.quote,
+      unavailable_message: market.message,
     },
 
     plain_english: toPlainEnglish(results, filing),
 
     what_has_to_be_true: {
-      // Solved against the market price; without one there is nothing to solve.
+      /* Implied growth is the growth rate that makes the DCF come out at today's
+         price — solved by running the engine backwards. The engine is the
+         backend's, and re-implementing it here would put two answers to the same
+         question in two languages, which is the mistake D-027 exists to prevent.
+         So this stays null even now that a price exists, and says which of the two
+         reasons it is null for. */
       implied_growth_pct: null,
       historical_growth_pct: histGrowth,
-      summary:
-        histGrowth === null
-          ? "We can't say what today's buyers are betting on without a share price."
-          : `Over the filed history this company's spare cash grew about ${histGrowth.toFixed(1)}% a year. What today's buyers are betting on needs a share price, which we don't have.`,
-      unavailable_reason: NO_PRICE,
+      summary: hasPrice
+        ? (histGrowth === null
+            ? "We don't have enough filed history to say what this company's spare cash has actually done."
+            : `Over the filed history this company's spare cash grew about ${histGrowth.toFixed(1)}% a year. That is the record; what today's price assumes about the future is a separate calculation we don't publish yet.`)
+        : (histGrowth === null
+            ? "We can't say what today's buyers are betting on without a share price."
+            : `Over the filed history this company's spare cash grew about ${histGrowth.toFixed(1)}% a year. What today's buyers are betting on needs a share price, which we don't have.`),
+      unavailable_reason: hasPrice ? IMPLIED_GROWTH_UNSOLVED : NO_PRICE,
     },
 
     // The envelope has no falsifiers field; they are an AI output. Never invented.
@@ -684,7 +1024,7 @@ export function toView(envelope) {
       number: num(r?.checklist_number),
     })),
 
-    sources: sourcesFor(filing),
+    sources: sourcesFor(filing, market.quote),
 
     /* ── named 1A.2 surface ─────────────────────────────────────────────────── */
     companyName: str(envelope.company_name),
@@ -715,8 +1055,14 @@ export function toView(envelope) {
     aiFallbackReason: aiFailed ? (str(analysis?.fallback_reason) ?? 'unknown') : null,
     aiDisagreement: str(analysis?.disagreement?.summary),
 
+    /* The gate, and the sentences that explain it. Carried whole so a component
+       can say why the word is missing in the backend's words rather than its own;
+       `canStateVerdict` below is the only field anything may branch on. */
+    plausibility,
+
     /* ── flags every consumer branches on ───────────────────────────────────── */
-    priceAvailable: false,
+    priceAvailable: hasPrice,
+    canStateVerdict: gateOpen,
     canValue: true,
     missingMetrics: arr(envelope.missing_metrics).map(String),
     normalizationWarningCount: arr(envelope.normalization_warnings).length,
