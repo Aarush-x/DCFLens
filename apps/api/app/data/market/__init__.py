@@ -4,6 +4,10 @@ Nothing constructs this yet; it lands as a self-contained provider so the
 analysis lane can wire it up separately.
 """
 
+from app.data.market.alphavantage import (
+    AlphaVantageQuoteClient,
+    AlphaVantageQuoteConfig,
+)
 from app.data.market.errors import (
     QuoteConfigurationError,
     QuoteDataError,
@@ -21,6 +25,8 @@ from app.data.market.models import (
 from app.data.market.yahoo import YahooQuoteClient, YahooQuoteConfig
 
 __all__ = [
+    "AlphaVantageQuoteClient",
+    "AlphaVantageQuoteConfig",
     "MarketPrice",
     "MarketQuote",
     "QuoteConfigurationError",

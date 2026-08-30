@@ -30,6 +30,10 @@ services:
         value: "60"
       - key: MARKET_QUOTE_FAILURE_TTL_SECONDS
         value: "30"
+      # Setting this in the Render dashboard is what switches the price feed
+      # from Yahoo to Alpha Vantage. sync: false so the key is never in the repo.
+      - key: ALPHAVANTAGE_API_KEY
+        sync: false
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GEMINI_TIMEOUT_SECONDS

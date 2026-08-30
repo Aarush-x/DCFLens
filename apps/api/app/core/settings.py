@@ -171,6 +171,7 @@ class Settings:
     market_quote_failure_ttl_seconds: int
     market_quote_cache_max_entries: int
     market_quote_user_agent: str | None
+    alphavantage_api_key: str | None
 
     @property
     def is_production(self) -> bool:
@@ -291,6 +292,12 @@ class Settings:
             market_quote_user_agent=_user_agent(
                 "MARKET_QUOTE_USER_AGENT", environment
             ),
+            # Presence of this key is what selects the quote provider: set it and
+            # the price comes from Alpha Vantage, leave it unset and the Yahoo
+            # client stands exactly as before. One variable rather than a provider
+            # name plus a key, because a name without a key is a broken config
+            # that only fails at the first request.
+            alphavantage_api_key=_clean(environment.get("ALPHAVANTAGE_API_KEY")) or None,
         )
 
 

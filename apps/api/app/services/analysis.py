@@ -29,6 +29,8 @@ from app.data.sec import (
     normalize_company_facts,
 )
 from app.data.market import (
+    AlphaVantageQuoteClient,
+    AlphaVantageQuoteConfig,
     MarketPrice,
     QuoteConfigurationError,
     YahooQuoteClient,
@@ -424,13 +426,32 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
             # a None it will rightly reject.
             quote_config["user_agent"] = settings.market_quote_user_agent
         try:
-            quote_provider = YahooQuoteClient(YahooQuoteConfig(**quote_config))
+            if settings.alphavantage_api_key:
+                # Alpha Vantage authenticates the caller, so it does not need the
+                # browser User-Agent Yahoo demands -- that override is dropped
+                # rather than passed to a config that has no field for it.
+                quote_provider = AlphaVantageQuoteClient(
+                    AlphaVantageQuoteConfig(
+                        api_key=settings.alphavantage_api_key,
+                        timeout_seconds=float(settings.market_quote_timeout_seconds),
+                        max_retries=settings.market_quote_max_retries,
+                    )
+                )
+            else:
+                quote_provider = YahooQuoteClient(YahooQuoteConfig(**quote_config))
         except QuoteConfigurationError:
             # This runs lazily inside the first request, so an exception escaping
             # here would 500 every request for the life of the process. Degrading
             # to no provider keeps the promise even when the quote client's own
             # configuration is what is broken.
             logger.warning("market_quote_provider_disabled_by_configuration")
+        else:
+            # Names the provider once at wiring time. Without it, "is my key
+            # actually being used?" is only answerable by reading the code.
+            logger.info(
+                "market_quote_provider_selected",
+                extra={"provider": type(quote_provider).__name__},
+            )
     cache_args = {
         "max_entries": settings.cache_max_entries,
         "ttl_seconds": float(settings.cache_ttl_seconds),
