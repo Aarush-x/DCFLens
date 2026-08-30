@@ -68,9 +68,9 @@ An invalid response is not partially trusted. The result uses `DETERMINISTIC_FAL
 ### Bounded Gemini recovery
 
 The REST adapter tries the configured `GEMINI_MODEL`, then the reviewed
-`gemini-2.5-flash` fallback if the primary model fails with a retryable
+`gemini-3.5-flash-lite` fallback if the primary model fails with a retryable
 availability, rate-limit, model-selection, or request error, or malformed JSON.
-If the configured model is already `gemini-2.5-flash`, it is not tried twice.
+If the configured model is already `gemini-3.5-flash-lite`, it is not tried twice.
 Model switches are logged; no local AI provider is introduced.
 
 - HTTP 429, 500, 502, and 503 permit at most two delayed retries per model.

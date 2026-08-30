@@ -233,7 +233,7 @@ class Settings:
                 raise RuntimeError(
                     "SEC_IDENTITY must include a valid application name and monitored email, without control characters"
                 ) from exc
-        gemini_model = _clean(environment.get("GEMINI_MODEL") or "gemini-2.5-flash")
+        gemini_model = _clean(environment.get("GEMINI_MODEL") or "gemini-3.5-flash")
         if not MODEL_PATTERN.fullmatch(gemini_model):
             raise RuntimeError("GEMINI_MODEL must be a safe gemini-* identifier")
 

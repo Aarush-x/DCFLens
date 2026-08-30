@@ -48,7 +48,7 @@ def test_gemini_client_sends_structured_output_schema_and_header() -> None:
     client = GeminiClient(
         GeminiClientConfig(
             api_key="secret-placeholder",
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash",
             timeout_seconds=17,
         ),
         opener=opener,
@@ -388,7 +388,7 @@ def test_gemini_client_uses_reviewed_fallback_after_malformed_primary_output(
         "/gemini-3.5-flash:generateContent"
     )
     assert requests[2].full_url.endswith(
-        "/gemini-2.5-flash:generateContent"
+        "/gemini-3.5-flash-lite:generateContent"
     )
     malformed_record = next(
         record
@@ -489,7 +489,7 @@ def test_persistent_primary_503_uses_reviewed_fallback(caplog) -> None:
     with caplog.at_level("INFO", logger="app.ai.gemini"):
         assert client.generate(ProviderRequest("system", "private-prompt", {})) == "{}"
     assert models == ["gemini-3.5-flash:generateContent"] * 3 + [
-        "gemini-2.5-flash:generateContent"
+        "gemini-3.5-flash-lite:generateContent"
     ]
     assert clock.delays == [1.0, 2.0]
     assert any(r.message == "gemini_transient_retry_scheduled" for r in caplog.records)
@@ -499,7 +499,7 @@ def test_persistent_primary_503_uses_reviewed_fallback(caplog) -> None:
 
 
 @pytest.mark.parametrize("model, expected_calls", [
-    ("gemini-3.5-flash", 6), ("gemini-2.5-flash", 3),
+    ("gemini-3.5-flash", 6), ("gemini-3.5-flash-lite", 3),
 ])
 def test_all_models_overloaded_stops_without_infinite_retries(model, expected_calls) -> None:
     clock = FakeClock()

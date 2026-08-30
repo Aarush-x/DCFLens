@@ -22,7 +22,11 @@ GOOGLE_API_KEY_PATTERN = re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b")
 MAX_PROVIDER_ERROR_BYTES = 16_384
 MAX_PROVIDER_MESSAGE_CHARS = 500
 MAX_OUTPUT_TOKENS = 16_384
-REVIEWED_FALLBACK_MODELS = ("gemini-2.5-flash",)
+# Tried in order after the configured model. Must be a model that is actually
+# callable: gemini-2.5-flash was closed to new Google projects ("no longer
+# available to new users"), so as a fallback it turned every recoverable blip
+# on the primary into a hard "All reviewed Gemini models failed".
+REVIEWED_FALLBACK_MODELS = ("gemini-3.5-flash-lite",)
 RETRYABLE_HTTP_STATUSES = frozenset({429, 500, 502, 503})
 MAX_TRANSIENT_RETRIES = 2
 MAX_REQUEST_ATTEMPTS = 8
@@ -66,7 +70,7 @@ class GeminiRateLimitError(GeminiProviderError):
 @dataclass(frozen=True, slots=True)
 class GeminiClientConfig:
     api_key: str
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-3.5-flash"
     timeout_seconds: float = 30.0
     max_response_bytes: int = 65_536
 
@@ -141,7 +145,9 @@ class GeminiClient:
                     "provider_rate_limit",
                     "provider_unavailable",
                 }:
-                    self._log_model_fallback(model, exc.fallback_reason)
+                    self._log_model_fallback(
+                        model, exc.fallback_reason, self._models[index + 1]
+                    )
                     continue
                 raise
 
@@ -160,7 +166,9 @@ class GeminiClient:
                     },
                 )
                 if has_fallback:
-                    self._log_model_fallback(model, "malformed_json")
+                    self._log_model_fallback(
+                        model, "malformed_json", self._models[index + 1]
+                    )
                     continue
             else:
                 if index > 0:
@@ -388,13 +396,15 @@ class GeminiClient:
             ),
         )
 
-    def _log_model_fallback(self, model: str, reason: str) -> None:
+    def _log_model_fallback(self, model: str, reason: str, next_model: str) -> None:
         logger.warning(
             "gemini_trying_reviewed_fallback_model",
             extra={
                 "failed_gemini_model": model,
                 "fallback_reason": reason,
-                "fallback_gemini_model": "gemini-2.5-flash",
+                # The model actually tried next, not a hardcoded name. The literal
+                # here used to disagree with the chain the moment either changed.
+                "fallback_gemini_model": next_model,
             },
         )
 

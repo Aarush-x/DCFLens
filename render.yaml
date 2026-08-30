@@ -35,7 +35,7 @@ services:
       - key: ALPHAVANTAGE_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.5-flash
       - key: GEMINI_TIMEOUT_SECONDS
         value: "30"
       - key: GOOGLE_API_KEY

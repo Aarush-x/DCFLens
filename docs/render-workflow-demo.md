@@ -39,7 +39,7 @@ so root `render.yaml` intentionally remains unchanged.
 | `APP_ENV` | `production` |
 | `SEC_IDENTITY` | `DCFLens your-real-monitored-email@your-domain.com`; replace with your actual contact |
 | `GOOGLE_API_KEY` | Your Gemini secret, entered only in Render Environment; optional for deterministic-only valuation |
-| `GEMINI_MODEL` | `gemini-2.5-flash`, or your verified available model |
+| `GEMINI_MODEL` | `gemini-3.5-flash`, or your verified available model |
 | `GEMINI_TIMEOUT_SECONDS` | `30` |
 | `SEC_TIMEOUT_SECONDS` | `15` |
 | `SEC_MAX_RETRIES` | `2` |
