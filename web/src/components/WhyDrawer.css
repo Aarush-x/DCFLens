@@ -36,3 +36,7 @@
 .whydrawer .mathrow .v { font-family: var(--m); font-weight: 600; white-space: nowrap }
 /* A figure we do not have renders as an em dash, and reads as absent, not as zero. */
 .whydrawer .mathrow .v.missing { color: var(--faint) }
+
+/* The row's "Source" trigger sits on its own line under the gloss, so it reads as
+   an offer attached to the row rather than as part of the sentence above it. */
+.whydrawer .mathrow .k .viewev { display: inline-block; margin-top: 8px }

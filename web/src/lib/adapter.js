@@ -147,6 +147,40 @@ function fiscalPeriod(filing, ref) {
   return period === 'FY' ? `FY${year}` : `${period} ${year}`
 }
 
+/* The tags the Why drawer's rows resolve to. `humanizeConcept` renders
+ * NetCashProvidedByUsedInOperatingActivities as "Net cash provided by used in
+ * operating activities" — the tag's own broken grammar, faithfully preserved. The
+ * raw concept is printed under every drawer row regardless, so naming these in
+ * English costs no provenance and spares the reader the tag. */
+const CONCEPT_LABELS = {
+  'us-gaap:NetCashProvidedByUsedInOperatingActivities': 'Cash from operations',
+  'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment': 'Spent on property and equipment',
+  'us-gaap:LongTermDebt': 'Long-term debt',
+  'us-gaap:CashCashEquivalentsAndShortTermInvestments': 'Cash and short-term investments',
+  'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding': 'Diluted shares outstanding',
+}
+
+/** The reported figure behind a reference. */
+const refValue = (ref) => num(ref?.normalized_value) ?? num(ref?.raw_value)
+
+/** One `values_used` row. Shared by the checklist evidence and the valuation-input
+ *  evidence below, so both render identically in the drawer. */
+function toValueUsed(ref) {
+  const concept = str(ref?.xbrl_concept)
+  return {
+    label: CONCEPT_LABELS[concept] ?? humanizeConcept(concept) ?? 'Reported value',
+    value: refValue(ref),
+    // Extra key, additive to the contract. Without it a decimal_ratio like 0.679
+    // formats as "$0.68". The formatter needs to know it is a ratio.
+    unit: str(ref?.unit) ?? 'USD',
+    // Also additive, and the two strongest auditability signals in the envelope:
+    // the tag the figure was filed under, and what we did to it on the way here.
+    // The evidence drawer prints both verbatim — see EvidenceDrawer.jsx.
+    concept,
+    transformation: str(ref?.transformation),
+  }
+}
+
 /**
  * Build one docs/API.md evidence object from a checklist result.
  *
@@ -165,14 +199,7 @@ function toEvidence(result, filing) {
   if (!refs.length && !metrics.length) return null
 
   const head = refs[0] ?? null
-  const values_used = refs.map((ref) => ({
-    label: humanizeConcept(ref?.xbrl_concept) ?? 'Reported value',
-    value: num(ref?.normalized_value) ?? num(ref?.raw_value),
-    // Extra key, additive to the contract. Without it a decimal_ratio like 0.679
-    // formats as "$0.68". The formatter needs to know it is a ratio.
-    unit: str(ref?.unit) ?? 'USD',
-    concept: str(ref?.xbrl_concept),
-  }))
+  const values_used = refs.map(toValueUsed)
 
   const calculation =
     metrics.map((m) => str(m?.calculation)).find(Boolean) ??
@@ -198,6 +225,157 @@ function toEvidence(result, filing) {
       calculation: str(m?.calculation),
     })),
   }
+}
+
+/* ── evidence for the valuation inputs ──────────────────────────────────────── */
+
+/* The Why drawer's rows are valuation INPUTS, and the envelope attaches evidence to
+ * checklist rows, not to inputs. What it does carry is
+ * `deterministic_baseline.traces[].evidence_references` — but that is one
+ * undifferentiated bucket repeated across the traces (the same 56 refs on three of
+ * MSFT's four, spanning seventeen fiscal years). It is the set of facts the engine
+ * LOADED, not the provenance of any one assumption. Handing all 56 to "Discount
+ * rate" would be the "the proof is somewhere in this document" failure this drawer
+ * exists to prevent, so no row is given the bucket.
+ *
+ * Instead a row earns evidence only when its figure can be RECONSTRUCTED from named
+ * references: the one pair whose difference is exactly `starting_free_cash_flow`,
+ * the one pair whose difference is exactly `net_debt`, the one reference equal to
+ * the diluted share count. That is a verified match rather than an attribution — if
+ * nothing reproduces the input, or if more than one combination does, the field gets
+ * no evidence and the row shows no trigger.
+ *
+ * The two rate rows are deliberately absent. `terminal_growth_rate` is
+ * "sector_terminal_prior=0.0300000000; final=0.0300000000" and `discount_rate` is a
+ * sector prior plus modifiers; neither is a filed figure, and this drawer's entire
+ * frame is filing provenance. Dressing a sector assumption in a 10-K header would
+ * present it as something the company reported, which it is not.
+ */
+
+const OCF = 'us-gaap:NetCashProvidedByUsedInOperatingActivities'
+const CAPEX = 'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment'
+const DEBT = 'us-gaap:LongTermDebt'
+const CASH = 'us-gaap:CashCashEquivalentsAndShortTermInvestments'
+const DILUTED = 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+
+/** Whole-dollar figures in the billions, which float64 holds exactly; the tolerance
+ *  only absorbs the engine's own rounding, never a genuinely different number. */
+const equal = (a, b) => Math.abs(a - b) <= Math.max(1, Math.abs(b) * 1e-9)
+
+/**
+ * Every reference the baseline traces cite, de-duplicated, narrowed to the filing
+ * the valuation actually starts from.
+ *
+ * The narrowing matters: the bucket carries seventeen years of the same five tags,
+ * and the inputs are the latest year's. Without it a cross-year coincidence could
+ * reproduce an input and we would cite the wrong fiscal year — the one failure mode
+ * worse than showing no evidence at all. When the envelope names no accession the
+ * whole bucket is searched, and the uniqueness rule below is what keeps that honest.
+ */
+function inputRefs(analysis, filing) {
+  const seen = new Set()
+  const all = []
+  arr(analysis?.deterministic_baseline?.traces).forEach((trace) => {
+    arr(trace?.evidence_references).forEach((ref) => {
+      if (refValue(ref) === null) return
+      const id = str(ref?.evidence_id) ?? `${ref?.xbrl_concept}:${ref?.raw_value}`
+      if (seen.has(id)) return
+      seen.add(id)
+      all.push(ref)
+    })
+  })
+  const accession = str(filing?.accession_number)
+  if (!accession) return all
+  return all.filter((ref) => str(ref?.accession_number) === accession)
+}
+
+const conceptRefs = (refs, concept) => refs.filter((ref) => str(ref?.xbrl_concept) === concept)
+
+/** The single reference equal to `target`. Null when none matches — and null when
+ *  more than one does, because an ambiguous provenance is not a provenance. */
+function soleRef(refs, concept, target) {
+  if (num(target) === null) return null
+  const hits = conceptRefs(refs, concept).filter((ref) => equal(refValue(ref), target))
+  return hits.length === 1 ? hits : null
+}
+
+/**
+ * The single (minuend, subtrahend) pair whose difference is `target`, in that order.
+ * `absolute` applies the abs() the engine's own transformation string names —
+ * "free_cash_flow = operating_cash_flow - abs(capital_expenditure)" — so a capital
+ * expenditure filed as a negative subtracts the same way as one filed positive.
+ */
+function solePair(refs, minuend, subtrahend, target, absolute = false) {
+  if (num(target) === null) return null
+  const hits = []
+  conceptRefs(refs, minuend).forEach((a) => {
+    conceptRefs(refs, subtrahend).forEach((b) => {
+      const taken = absolute ? Math.abs(refValue(b)) : refValue(b)
+      if (equal(refValue(a) - taken, target)) hits.push([a, b])
+    })
+  })
+  return hits.length === 1 ? hits[0] : null
+}
+
+/** An evidence object in the docs/API.md shape, built straight from references.
+ *  Same `url` rule as `toEvidence`: the readable filing, never the companyfacts feed. */
+function evidenceFromRefs(refs, filing, calculation) {
+  if (!refs?.length) return null
+  const head = refs[0]
+  return {
+    filing_type: str(head?.filing_form) ?? str(filing?.filing_form),
+    fiscal_period: fiscalPeriod(filing, head),
+    filed_on: dateOnly(head?.filing_date) ?? dateOnly(filing?.filing_date),
+    values_used: refs.map(toValueUsed),
+    calculation,
+    section: null,
+    url: str(filing?.filing_url),
+    provenance: 'xbrl',
+    data_url: str(head?.source_url),
+    metrics: [],
+  }
+}
+
+/**
+ * `the_math.evidence`, keyed by field name — docs/API.md: an absent key means null,
+ * and a null renders as no trigger on that row.
+ *
+ * The calculation sentences describe the transformation the engine already recorded
+ * on the references; nothing here is computed and no figure is restated.
+ */
+function mathEvidence(analysis, filing, inputs) {
+  const refs = inputRefs(analysis, filing)
+  if (!refs.length) return {}
+  const out = {}
+
+  const fcf = solePair(refs, OCF, CAPEX, num(inputs?.starting_free_cash_flow), true)
+  if (fcf) {
+    out.starting_free_cash_flow = evidenceFromRefs(
+      fcf,
+      filing,
+      'The cash the business generated last year, less what it spent on property and equipment.',
+    )
+  }
+
+  const netDebt = solePair(refs, DEBT, CASH, num(inputs?.net_debt))
+  if (netDebt) {
+    out.net_debt = evidenceFromRefs(
+      netDebt,
+      filing,
+      'What the company owes over the long term, less the cash and short-term investments it holds. A negative figure means it holds more than it owes.',
+    )
+  }
+
+  const shares = soleRef(refs, DILUTED, num(inputs?.diluted_shares))
+  if (shares) {
+    out.shares_outstanding = evidenceFromRefs(
+      shares,
+      filing,
+      'The diluted share count the company reported — diluted, so it counts the shares that options and similar awards would add.',
+    )
+  }
+
+  return out
 }
 
 /* ── business quality ───────────────────────────────────────────────────────── */

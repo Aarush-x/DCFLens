@@ -3,6 +3,7 @@ import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { money, percent, count, EMPTY } from '../lib/format.js'
+import ViewEvidence from './ViewEvidence.jsx'
 import './WhyDrawer.css'
 
 /* "Why? Show me the math" — the second layer, ported from the `.why` / `.whybody` /
@@ -27,8 +28,14 @@ function stageLabel(from, years) {
 }
 
 /**
- * The seven rows, in the mockup's order: { label, gloss, value }.
+ * The seven rows, in the mockup's order: { label, gloss, value, field }.
  * A figure we do not have renders as EMPTY — an em dash — never as zero.
+ *
+ * `field` is the key this row's provenance hangs off in `the_math.evidence`, which
+ * docs/API.md defines as keyed by field name with an absent key meaning null. The
+ * two growth stages have no key of their own — they are OUR assumptions, not
+ * reported figures, and there is no filing to point at for them, so they carry no
+ * trigger rather than a trigger that leads nowhere.
  */
 function rowsFor(math) {
   const s1 = math.stage_1 ?? {}
@@ -39,6 +46,7 @@ function rowsFor(math) {
   return [
     {
       label: 'Spare cash last year',
+      field: 'starting_free_cash_flow',
       gloss: "What's left after running costs and equipment. The starting point for everything.",
       value: money(math.starting_free_cash_flow),
     },
@@ -56,22 +64,26 @@ function rowsFor(math) {
     },
     {
       label: 'Growth after that, forever',
+      field: 'terminal_growth_pct',
       gloss: 'Roughly the pace of the economy itself.',
       value: percent(math.terminal_growth_pct),
     },
     {
       label: 'Discount rate',
+      field: 'discount_rate_pct',
       gloss: 'How much we shrink future money, to account for risk and for waiting.',
       value: percent(math.discount_rate_pct),
     },
     {
       // Mockup: "Negative means Apple holds more cash than it owes."
       label: 'Debt, minus cash',
+      field: 'net_debt',
       gloss: 'Negative means the company holds more cash than it owes.',
       value: money(math.net_debt),
     },
     {
       label: 'Shares outstanding',
+      field: 'shares_outstanding',
       gloss: 'We divide the whole business by this to get a price per share.',
       value: count(math.shares_outstanding),
     },
@@ -138,6 +150,15 @@ export default function WhyDrawer({ math }) {
               <span className="k">
                 {row.label}
                 <em>{row.gloss}</em>
+                {/* The provenance of this exact input. "Source" rather than "View
+                    evidence" — inside a row of figures the question is where the
+                    number came from, and the shorter word keeps the row's second
+                    line from outgrowing the gloss above it. */}
+                <ViewEvidence
+                  evidence={row.field ? (math.evidence?.[row.field] ?? null) : null}
+                  claim={row.label}
+                  label="Source"
+                />
               </span>
               <span className={row.value === EMPTY ? 'v missing' : 'v'}>{row.value}</span>
             </div>

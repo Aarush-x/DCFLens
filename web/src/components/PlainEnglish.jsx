@@ -1,4 +1,5 @@
 import Label from './ui/Label.jsx'
+import ViewEvidence from './ViewEvidence.jsx'
 import { percent, cleanName } from '../lib/format.js'
 import './PlainEnglish.css'
 
@@ -103,7 +104,15 @@ function Claim({ item, companyName }) {
         {item.title}
       </h3>
       {item.body ? <p>{item.body}</p> : null}
-      <Cite evidence={item.evidence} companyName={companyName} />
+      {/* The citation names the document; the trigger opens what was actually read
+          out of it — the tagged figures, the arithmetic, and whether the number was
+          machine-readable or lifted out of prose. Both, or neither: a claim with no
+          evidence renders the "No filing cited" line alone, because ViewEvidence
+          returns null rather than a dead control. */}
+      <div className="citerow">
+        <Cite evidence={item.evidence} companyName={companyName} />
+        <ViewEvidence evidence={item.evidence} claim={item.title} />
+      </div>
     </article>
   )
 }
@@ -215,6 +224,33 @@ function partition(items, data) {
   }
 }
 
+/* ── the write-up we didn't get ───────────────────────────────────────────────
+ *
+ * Gemini fails every call in production, so this renders on every live response.
+ * It used to be a full-width bordered card between the range bar and the panes —
+ * the second thing on the screen, interrupting the argument to apologise before
+ * the argument had started.
+ *
+ * It belongs here instead. The thing that is missing is the written case, and the
+ * written case is this section, so the notice is a caveat ON the heading rather
+ * than a page-level announcement: pane-width, no box, one hairline down its left
+ * edge. It says exactly what it said before — every figure on the page is real —
+ * it just no longer says it across the whole page, or first.
+ */
+function AiNote({ reason }) {
+  return (
+    <p className="ainote">
+      <b>Written explanation unavailable.</b> The estimate, the range and the
+      assumptions behind them are unaffected &mdash; they come from the filings, not
+      from the write-up. What&rsquo;s missing is only the part that turns those
+      numbers into sentences.
+      {reason ? <span className="why"> ({reason})</span> : null}
+    </p>
+  )
+}
+
+const aiUnavailable = (data) => data?.aiStatus === 'DETERMINISTIC_FALLBACK'
+
 /**
  * @param {object} props
  * @param {Array}  props.items  `plain_english[]` from the adapter.
@@ -235,6 +271,7 @@ export default function PlainEnglish({ items, data }) {
     return (
       <section className="plain-english">
         <Label>What happened</Label>
+        {aiUnavailable(data) && <AiNote reason={data.aiFallbackReason} />}
         {cards.length === 0
           ? <p className="empty">We don’t have a written account of what got in the way.</p>
           : cards.map((item, i) => (
@@ -251,6 +288,7 @@ export default function PlainEnglish({ items, data }) {
   return (
     <section className="plain-english">
       <Label>Why we think so</Label>
+      {aiUnavailable(data) && <AiNote reason={data.aiFallbackReason} />}
 
       <Block
         heading="What must be true for this to hold"

@@ -6,6 +6,7 @@ import VerdictBanner from '../VerdictBanner.jsx'
 import RangeBar from '../RangeBar.jsx'
 import PlainEnglish from '../PlainEnglish.jsx'
 import WhyDrawer from '../WhyDrawer.jsx'
+import EvidenceProvider from '../EvidenceProvider.jsx'
 import TheNumbers from '../TheNumbers.jsx'
 import RecentRail, { seedHistory, pushHistory, nameFor } from './RecentRail.jsx'
 import TopBar from './TopBar.jsx'
@@ -15,8 +16,6 @@ import LoadingNarration from './LoadingNarration.jsx'
 import RequestFailed from './RequestFailed.jsx'
 import { unresolvedQuery } from '../../lib/failure.js'
 import { cleanName } from '../../lib/format.js'
-import Card from '../ui/Card.jsx'
-import Label from '../ui/Label.jsx'
 import './app.css'
 
 /* ── The app screen: `#app` from design/index.html, assembled ─────────────────
@@ -177,7 +176,6 @@ function Result({ data, loading, error, ticker, name }) {
 
 function Analysis({ data }) {
   const scope = useRef(null)
-  const fallback = data.aiStatus === 'DETERMINISTIC_FALLBACK'
 
   /* The tail of playApp() in design/index.html — the four "Why we think so" blocks
      stagger in last. VerdictBanner and RangeBar own the beats before this one; the
@@ -203,55 +201,44 @@ function Analysis({ data }) {
   const tint = VERDICT_COLOUR[data.verdict?.label] ?? 'var(--cream)'
 
   return (
-    <div
-      ref={scope}
-      data-state="ready"
-      data-verdict={data.verdict?.label ?? null}
-      data-ai-status={data.aiStatus}
-    >
-      {/* Product non-negotiable #4 — verdict before reasoning, biggest on screen. */}
-      <VerdictBanner data={data} />
+    /* Evidence hangs off claims in both panes and off the maths rows inside the Why
+       drawer, and only ONE panel may be open at a time — so the state sits here,
+       above all three, rather than in each claim. See EvidenceProvider.jsx. */
+    <EvidenceProvider>
+      <div
+        ref={scope}
+        data-state="ready"
+        data-verdict={data.verdict?.label ?? null}
+        data-ai-status={data.aiStatus}
+      >
+        {/* Product non-negotiable #4 — verdict before reasoning, biggest on screen. */}
+        <VerdictBanner data={data} />
 
-      {/* The one place the verdict colour is set, and it is scoped to the bar:
-          RangeBar's knob and its 26px bloom read it off currentColor rather than
-          taking a prop (RangeBar.css). Everything else on the page states its own
-          colour, so tinting a wider container would repaint text that shouldn't move. */}
-      <div style={{ color: tint }}>
-        <RangeBar price={data.price} />
-      </div>
-
-      {fallback && <AiFallbackNotice reason={data.aiFallbackReason} />}
-
-      <div className="panes">
-        <div>
-          <PlainEnglish items={data.plain_english} data={data} />
-          {/* The second layer. The ONLY place jargon is allowed, and only glossed. */}
-          <WhyDrawer math={data.the_math} />
+        {/* The one place the verdict colour is set, and it is scoped to the bar:
+            RangeBar's knob and its 26px bloom read it off currentColor rather than
+            taking a prop (RangeBar.css). Everything else on the page states its own
+            colour, so tinting a wider container would repaint text that shouldn't move. */}
+        <div style={{ color: tint }}>
+          <RangeBar price={data.price} />
         </div>
-        <TheNumbers data={data} />
+
+        {/* The AI-unavailable notice used to sit HERE, full width, between the verdict
+            and the reasoning — interrupting the argument to apologise on every live
+            response. It now renders inside PlainEnglish, under the "Why we think so"
+            heading, because the missing write-up IS that section. `data-ai-status`
+            above still carries the state for the harness. */}
+
+        <div className="panes">
+          <div>
+            <PlainEnglish items={data.plain_english} data={data} />
+            {/* The second layer. The ONLY place jargon is allowed, and only glossed. */}
+            <WhyDrawer math={data.the_math} />
+          </div>
+          <TheNumbers data={data} />
+        </div>
+
+        <SourcesFooter sources={data.sources} />
       </div>
-
-      <SourcesFooter sources={data.sources} />
-    </div>
-  )
-}
-
-/* ── the states around it ────────────────────────────────────────────────────── */
-
-/* Today's normal path: Gemini fails every call and the API answers
-   DETERMINISTIC_FALLBACK. This is a notice, not an error — the arithmetic is
-   untouched and every figure on the page is still real. It sits under the range
-   bar so it cannot outrank the verdict. */
-function AiFallbackNotice({ reason }) {
-  return (
-    <Card variant="box" data-notice="fallback" style={{ marginBottom: 34 }}>
-      <Label>Written explanation unavailable</Label>
-      <p style={{ color: 'var(--dim)', margin: '10px 0 0', fontSize: 14.5, lineHeight: 1.6, maxWidth: '60ch' }}>
-        The estimate, the range and the assumptions behind them are unaffected — they
-        come from the filings, not from the write-up. What&rsquo;s missing is only the
-        part that turns those numbers into sentences.
-        {reason ? ` (${reason})` : ''}
-      </p>
-    </Card>
+    </EvidenceProvider>
   )
 }

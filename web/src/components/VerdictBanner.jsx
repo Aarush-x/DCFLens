@@ -204,14 +204,20 @@ const HEAD_ROW = {
    .sources and the mockup's .vs, no new furniture. Two columns side by side is the
    argument made visually: they are separate readings and neither is averaged into
    the other. */
+/* Vertical rhythm. design/index.html allots exactly 54px between the sub-line and
+   the range bar (`.avsub { margin: 0 0 54px }`), and this readout is new furniture
+   inside that gap — 2A.1 spent 30px above it and 48px below, which is 78px of air
+   where the reference has 54, and it is a good part of what pushed the top of the
+   page down. 26 above (see the render) and 36 below puts it back within a few px
+   of the mockup while still letting the bar breathe away from the axis clauses. */
 const AXES = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
   gap: 30,
   maxWidth: '64ch',
   borderTop: '1px solid var(--hair)',
-  paddingTop: 22,
-  margin: '0 0 48px',
+  paddingTop: 20,
+  margin: '0 0 36px',
 }
 
 /* .card h3 from design/index.html — the display face at its small step. */
@@ -412,7 +418,9 @@ export default function VerdictBanner({ data }) {
       </h1>
       {/* The readout takes over the gap to the range bar when it is there, so the
           block below always starts the same distance down the page. */}
-      <p ref={sub} style={{ ...SUB, marginBottom: showAxes ? 30 : 54 }}>
+      {/* 54px is the mockup's gap from the sub-line to the bar. With the readout in
+          between, this half shrinks and AXES carries the rest. */}
+      <p ref={sub} style={{ ...SUB, marginBottom: showAxes ? 26 : 54 }}>
         {body}
       </p>
 

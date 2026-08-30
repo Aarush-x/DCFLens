@@ -10,12 +10,12 @@ import './TheNumbers.css'
  * Ported from the <aside> in design/index.html, and from the reduced two-card
  * <aside> in design/app.html for the cannot-value state.
  *
- * The first card leads with the RANGE, not the mid. A lone "$184.80" is the exact
- * false precision non-negotiable #2 forbids, so the headline figure is the real
- * sensitivity interval — adapter `value.low`/`value.high`, off the engine's
- * sensitivity_interval — and the mid is demoted to a faint line beneath it. No
- * spread is ever synthesised around the point estimate; if the interval is absent
- * the card says so rather than inventing one.
+ * Two cards, not three. What used to be "Our best estimate" and "If things go…"
+ * were the same three figures twice over — see the note on BestEstimate — so the
+ * column now leads with the scenarios and the range is left to the places that
+ * already state it larger and earlier. No spread is ever synthesised around the
+ * point estimate; if the interval is absent the card says so rather than
+ * inventing one, and a lone "$184.80" never leads.
  *
  * Reads only the docs/API.md v2 view shape that src/lib/adapter.js produces.
  * Nothing here fetches, and nothing here computes a figure the adapter did not
@@ -72,8 +72,27 @@ function CountUp({ values, format, className = 'big2', style }) {
   return <div className={className} ref={ref} style={style}>{format(values)}</div>
 }
 
-/* ── card 1 · our best estimate ─────────────────────────────────────────────── */
-
+/* ── card 1 · our best estimate ─────────────────────────────────────────────
+ *
+ * One card, where there were two. `price.fair_value_low/mid/high` and
+ * `the_math.scenarios[].value_per_share` are not two readings that happen to
+ * agree — adapter.js reads BOTH off the same three fields (`lower_bound_per_share`,
+ * `intrinsic_value_per_share`, `upper_bound_per_share`), so "Our best estimate
+ * $165 – $205 / Mid-point $184.80" and "If things go… Badly $165.00 / As expected
+ * $184.80 / Well $205.00" were the same three numbers printed twice, one card
+ * apart, by construction rather than by accident.
+ *
+ * Which of the two survives is not a toss-up. The range is DERIVED — it is the
+ * span from the pessimistic case to the optimistic one — and it is already the
+ * page's headline (or its sub-line), and the range bar's two band labels besides.
+ * A fourth statement of it at the top of this column is the one thing on the
+ * screen that carries no information at all. The scenario rows are the primitive,
+ * and they say the same interval while naming what each end MEANS.
+ *
+ * So the column leads with the scenarios, and the margin of safety — the only
+ * figure the old first card carried that appears nowhere else — comes with them.
+ * It is measured from the mid, which is now the row directly above it.
+ */
 function BestEstimate({ data }) {
   const mid = data.price?.fair_value_mid ?? data.value?.mid ?? null
   const low = data.price?.fair_value_low ?? data.value?.low ?? null
@@ -81,27 +100,40 @@ function BestEstimate({ data }) {
   const mos = data.verdict?.margin_of_safety_pct ?? null
   const hasPrice = Number.isFinite(data.price?.current)
   const hasRange = Number.isFinite(low) && Number.isFinite(high)
+  const rows = (data.the_math?.scenarios ?? []).filter(Boolean)
 
   return (
     <Card variant="box">
       <div className="cap">Our best estimate</div>
 
-      {/* The headline. Whole dollars at both ends, which is what `range()` gives and
-          what the mockup's band labels use — cents on a range would claim a precision
-          the range itself exists to deny. */}
-      {hasRange
-        ? <CountUp values={[low, high]} format={([lo, hi]) => range(lo, hi)} />
-        : <CountUp values={[mid]} format={([v]) => price(v)} />}
-
-      {/* Secondary, faint: the same number that used to be the headline. It still
-          earns its place — the margin of safety below is measured from it — but it
-          is no longer the thing the eye lands on. */}
-      {hasRange && Number.isFinite(mid) && (
-        <div className="midline">Mid-point {price(mid)}</div>
-      )}
+      {rows.length
+        ? (
+          <>
+            {/* The condition the rows answer. One line, so the rows keep the
+                mockup's one-word labels instead of repeating "if things go" three
+                times over. */}
+            <p className="scnhint">If things go&hellip;</p>
+            {rows.map((s, i) => (
+              <div className="scn" key={s.name ?? i}>
+                <span className="n">{SCENARIO_LABELS[s.name] ?? s.name ?? EMPTY}</span>
+                {Number.isFinite(s.value_per_share)
+                  ? <span className="v">{price(s.value_per_share)}</span>
+                  /* Faint, so an absent bound reads as absent rather than as a figure. */
+                  : <span className="v" style={{ color: 'var(--faint)' }}>{EMPTY}</span>}
+              </div>
+            ))}
+          </>
+        )
+        /* No scenarios to lead with — a valuation without the interval behind it.
+           Fall back to stating the figure we do have, at the card's headline size,
+           exactly as this card did before the merge. */
+        : hasRange
+          ? <CountUp values={[low, high]} format={([lo, hi]) => range(lo, hi)} />
+          : <CountUp values={[mid]} format={([v]) => price(v)} />}
 
       {/* The engine had no sensitivity interval. We do not manufacture one around
-          the mid; we say the figure is lonelier than it looks. */}
+          the mid; we say the figure is lonelier than it looks. Still owed when the
+          rows render, because two of the three then show a dash. */}
       {!hasRange && (
         <p className="numnote">
           We couldn&rsquo;t work out a range for this one, so this single figure is far
@@ -110,14 +142,22 @@ function BestEstimate({ data }) {
       )}
 
       {Number.isFinite(mos)
-        ? <div className="delta" style={{ color: deltaColour(mos) }}>{deltaText(mos)}</div>
+        ? <div className="delta mos" style={{ color: deltaColour(mos) }}>{deltaText(mos)}</div>
         /* No delta at all — not a 0%, not a dash. One quiet line saying why.
-           The live service is SEC/XBRL only, so this is today's normal state. */
+           The live service is SEC/XBRL only, so this is today's normal state.
+
+           D-017 wants the gap stated wherever a figure would have sat, and it is —
+           but on a no-price response the two-axis readout and the range bar have
+           BOTH already said it in full, above this and larger. A third sentence
+           saying the same thing is the wall this rebalance is meant to prevent, so
+           down here it is a footnote, not a paragraph. The has-a-price case is a
+           different fact (we have the price, we could not compute the comparison)
+           and keeps its full sentence. */
         : (
-          <p className="numnote">
+          <p className="numnote mos">
             {hasPrice
               ? "We can't compare this against today's price yet."
-              : "We don't have today's share price, so there's nothing to compare this against."}
+              : 'No share price to compare against.'}
           </p>
         )}
     </Card>
@@ -135,28 +175,6 @@ function deltaColour(mos) {
 function deltaText(mos) {
   if (mos === 0) return "Level with today's price"
   return `${signedPercent(mos)} ${mos > 0 ? 'above' : 'below'} today's price`
-}
-
-/* ── card 2 · if things go… ─────────────────────────────────────────────────── */
-
-function Scenarios({ scenarios }) {
-  const rows = (scenarios ?? []).filter(Boolean)
-  if (!rows.length) return null
-
-  return (
-    <Card variant="box">
-      <div className="cap" style={{ marginBottom: 8 }}>If things go…</div>
-      {rows.map((s, i) => (
-        <div className="scn" key={s.name ?? i}>
-          <span className="n">{SCENARIO_LABELS[s.name] ?? s.name ?? EMPTY}</span>
-          {Number.isFinite(s.value_per_share)
-            ? <span className="v">{price(s.value_per_share)}</span>
-            /* Faint, so an absent bound reads as absent rather than as a figure. */
-            : <span className="v" style={{ color: 'var(--faint)' }}>{EMPTY}</span>}
-        </div>
-      ))}
-    </Card>
-  )
 }
 
 /* ── card 3 · what has to be true ───────────────────────────────────────────── */
@@ -253,7 +271,6 @@ export default function TheNumbers({ data }) {
     <aside>
       <Label style={{ marginBottom: 22 }}>The numbers</Label>
       <BestEstimate data={data} />
-      <Scenarios scenarios={data.the_math.scenarios} />
       <WhatHasToBeTrue belief={data.what_has_to_be_true} />
     </aside>
   )
