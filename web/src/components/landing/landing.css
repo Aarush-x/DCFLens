@@ -113,6 +113,67 @@
   text-transform: uppercase; color: var(--faint);
 }
 
+/* ── FAQ ────────────────────────────────────────────────────────────────────
+   Hairline rows, no boxes. The cards section already owns the 1px-grid tile
+   look, and repeating it two sections later would read as furniture rather
+   than as a different kind of content.
+
+   Native <details>, so there is no height animation to write and none to
+   suppress under reduced motion — the row simply opens. The .rv reveal on each
+   row is the section's only motion and Landing.jsx already drives it.
+
+   Body copy is --dim, never --faint: --faint fails AA against --ink (DESIGN.md
+   §3, known issue) and is confined here to the mono index number, which carries
+   no information a reader needs. */
+#site .faq .sub { max-width: 52ch }
+#site .qas { border-top: 1px solid var(--hair) }
+
+#site .qa { border-bottom: 1px solid var(--hair) }
+#site .qa summary {
+  display: grid; grid-template-columns: 44px 1fr 24px; align-items: baseline;
+  gap: 4px; padding: 26px 4px; cursor: pointer; list-style: none;
+  transition: background .18s ease;
+}
+#site .qa summary::-webkit-details-marker { display: none }
+#site .qa summary:hover { background: var(--hoverbg) }
+#site .qa summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+
+#site .qa .qn {
+  font-family: var(--m); font-size: var(--t-label); color: var(--faint);
+  letter-spacing: .1em; transition: color .18s ease;
+}
+#site .qa .qt {
+  font-family: var(--fd); font-size: clamp(18px, 2.1vw, 22px); font-weight: 600;
+  letter-spacing: var(--dt); word-spacing: var(--dws); color: var(--cream); line-height: 1.35;
+}
+#site .qa[open] .qn { color: var(--accent) }
+
+/* Caret drawn from two borders rather than a glyph, so it stays crisp at any
+   size and rotates about its own centre. */
+#site .qa .qc {
+  justify-self: end; align-self: center; width: 8px; height: 8px;
+  border-right: 1.5px solid var(--dim); border-bottom: 1.5px solid var(--dim);
+  transform: rotate(45deg) translate(-2px, -2px); transform-origin: center;
+  transition: transform .22s ease, border-color .18s ease;
+}
+#site .qa[open] .qc {
+  transform: rotate(225deg) translate(-2px, -2px); border-color: var(--accent);
+}
+
+/* Indented to the question text, not the number, so the answer reads as
+   hanging off its question rather than starting a new column. */
+#site .qbody { padding: 0 4px 30px; margin-left: 44px }
+#site .qbody p {
+  margin: 0 0 15px; max-width: 64ch;
+  font-size: var(--t-body); line-height: 1.7; color: var(--dim);
+}
+#site .qbody p:last-child { margin-bottom: 0 }
+
+@media (max-width: 620px) {
+  #site .qa summary { grid-template-columns: 30px 1fr 20px; padding: 22px 2px }
+  #site .qbody { margin-left: 30px }
+}
+
 /* ── reduced motion ─────────────────────────────────────────────────────────
    The pinned sections exist only to give the scrub something to scrub through.
    With no scrubbing there is nothing to scroll past, so they collapse to their

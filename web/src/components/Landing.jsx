@@ -9,6 +9,7 @@ import PinnedStatement from './landing/PinnedStatement.jsx'
 import ScrubRangeBar from './landing/ScrubRangeBar.jsx'
 import ExplainerCards from './landing/ExplainerCards.jsx'
 import ReverseDcf from './landing/ReverseDcf.jsx'
+import Faq from './landing/Faq.jsx'
 import ClosingCta from './landing/ClosingCta.jsx'
 import './landing/landing.css'
 
@@ -76,6 +77,7 @@ export default function Landing({ onEnter }) {
       <ScrubRangeBar sectionRef={barSect} />
       <ExplainerCards />
       <ReverseDcf />
+      <Faq />
       <ClosingCta onEnter={onEnter} />
     </div>
   )
