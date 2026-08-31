@@ -17,10 +17,10 @@
   width: 100vw; margin-left: calc(-1 * (var(--railw) + var(--mainpad)));
 }
 .hunt h1 {
-  font-family: var(--fd); font-weight: 700; letter-spacing: -.035em;
+  font-family: var(--fd); font-weight: 700; letter-spacing: -.035em; word-spacing: var(--dws);
   font-size: clamp(34px, 5vw, 62px); line-height: 1.04; margin: 0 0 20px; max-width: 16ch;
 }
-.hunt p { margin: 0 0 46px; font-size: 16px; line-height: 1.6; color: var(--dim); max-width: 52ch }
+.hunt p { margin: 0 0 46px; font-size: var(--t-lead); line-height: 1.6; color: var(--dim); max-width: 52ch }
 
 .hunt .bigsearch { width: min(100%, 620px); border-bottom: 1px solid var(--hair2); padding-bottom: 16px }
 .hunt .bigsearch input {
@@ -36,7 +36,7 @@
 
    --dim for the sentence and --cream for the names. NOT --faint, which DESIGN.md
    §3 flags as failing AA and which disappears against pitch black. */
-.hunt .starters { margin: 22px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--dim) }
+.hunt .starters { margin: 22px 0 0; font-size: var(--t-body); line-height: 1.6; color: var(--dim) }
 .hunt .starters button {
   background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
   color: var(--cream); border-bottom: 1px solid var(--hair2);
@@ -47,7 +47,7 @@
 .hunt .starters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
 
 /* The rail before it has earned a row. */
-.railempty { padding: 2px 22px; font-size: 12.5px; line-height: 1.6; color: var(--dim) }
+.railempty { padding: 2px 22px; font-size: var(--t-small); line-height: 1.6; color: var(--dim) }
 
 /* ── The narrated wait (design/app.html `#s-load`, ported verbatim) ──
    Every rule below is the mockup's, with two changes: `.prog i` gets a width
@@ -55,12 +55,15 @@
    and `.coldstart` is new — the mockup had nothing to say about a sleeping
    service because it never called one. */
 .load { max-width: 600px; padding-top: 8vh }
-.load .eyebrow {
-  font-family: var(--m); font-size: 11px; letter-spacing: .2em;
-  text-transform: uppercase; color: var(--faint); margin-bottom: 20px;
+/* The rule that used to be here restated .eyebrow's five properties at a
+   different size. It is the same label doing the same job — it takes the shared
+   primitive and only says what is local to the loading screen. */
+.load .eyebrow { margin-bottom: 20px }
+.load h2 {
+  font-family: var(--fd); font-size: 34px; font-weight: var(--dw);
+  letter-spacing: -.035em; word-spacing: var(--dws); margin: 0 0 8px;
 }
-.load h2 { font-size: 34px; font-weight: 600; letter-spacing: -.035em; margin: 0 0 8px }
-.load .meta { font-family: var(--m); font-size: 12px; color: var(--faint); margin-bottom: 44px }
+.load .meta { font-family: var(--m); font-size: var(--t-meta); color: var(--faint); margin-bottom: 44px }
 
 .prog { height: 2px; background: var(--hair); margin-bottom: 40px; position: relative; overflow: hidden }
 .prog i {
@@ -68,8 +71,8 @@
   transition: width .35s linear;
 }
 
-.step { display: flex; gap: 14px; align-items: baseline; padding: 11px 0; font-size: 15px; color: var(--faint) }
-.step .ix { font-family: var(--m); font-size: 11px; width: 16px; flex: none }
+.step { display: flex; gap: 14px; align-items: baseline; padding: 11px 0; font-size: var(--t-body); color: var(--faint) }
+.step .ix { font-family: var(--m); font-size: var(--t-meta); width: 18px; flex: none }
 .step.done { color: var(--dim) }
 .step.done .ix { color: var(--under) }
 .step.now { color: var(--cream) }
@@ -77,7 +80,7 @@
 .blink { animation: bl 1.1s ease-in-out infinite }
 @keyframes bl { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
-.load .foot { margin-top: 44px; font-size: 13.5px; color: var(--faint); line-height: 1.6 }
+.load .foot { margin-top: 44px; font-size: var(--t-small); color: var(--dim); line-height: 1.6 }
 /* Added at 4s (the sleeping service) and again at 20s (longer than usual). Both
    are appended, never swapped, so two can stand at once. */
 .load .coldstart { display: block; margin-top: 10px }

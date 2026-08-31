@@ -14,12 +14,12 @@
    rather than as a panel dropped into it. */
 .tvshare .tvhead {
   display: flex; justify-content: space-between; gap: 20px; align-items: baseline;
-  font-size: 14px;
+  font-size: var(--t-body);
 }
 .tvshare .tvhead .k { color: var(--cream); font-weight: 500 }
 .tvshare .tvhead .k em {
-  display: block; font-style: normal; font-weight: 400; font-size: 13px;
-  color: var(--faint); margin-top: 3px; max-width: 46ch; line-height: 1.5;
+  display: block; font-style: normal; font-weight: 400; font-size: var(--t-small);
+  color: var(--dim); margin-top: 4px; max-width: 46ch; line-height: 1.55;
 }
 /* var(--m) plus the inherited tabular figures — non-negotiable #6. */
 .tvshare .tvhead .v {
@@ -45,7 +45,7 @@
 .tvshare .tvkey { margin-top: 14px }
 .tvshare .tvk {
   display: flex; align-items: baseline; gap: 10px;
-  padding: 7px 0; font-size: 13.5px;
+  padding: 8px 0; font-size: var(--t-body);
 }
 /* Same 6px round pip the mockup's claim cards use, so a swatch here and a pip on a
    plain-English card read as the same mark. */
@@ -62,7 +62,7 @@
 
 .tvshare .tvgloss,
 .tvshare .tvflag {
-  font-size: 13px; line-height: 1.6; max-width: 52ch; margin: 12px 0 0;
+  font-size: var(--t-small); line-height: 1.6; max-width: 52ch; margin: 12px 0 0;
 }
 .tvshare .tvgloss { color: var(--dim) }
 /* The caution sits on its own hairline so it reads as an added remark rather than a

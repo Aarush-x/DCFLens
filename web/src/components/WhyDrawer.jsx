@@ -141,6 +141,12 @@ export default function WhyDrawer({ math, checks, price = null }) {
 
   return (
     <div className="whydrawer" ref={scope}>
+      {/* The trigger used to be one 14.5px line and a ▾ glyph in a plain outlined
+          box — the smallest, quietest thing on a screen whose entire second half
+          it opens. It now says what is behind it, because "show me the math" is a
+          promise a beginner has no way to price: nothing on the closed screen
+          hints that clicking gets you the seven inputs, the checklist and the
+          sensitivity grid. The subtitle is the offer; the button is the door. */}
       <button
         type="button"
         className="why"
@@ -148,47 +154,77 @@ export default function WhyDrawer({ math, checks, price = null }) {
         aria-controls="why-body"
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Why? Show me the math</span>
-        <span className="chev" ref={chevron} aria-hidden="true">&#9662;</span>
+        <span className="whylabel">
+          <span className="whytitle">Why? Show me the math</span>
+          <span className="whysub">
+            The seven numbers behind the range, what we checked, and how much the
+            answer moves when the assumptions do.
+          </span>
+        </span>
+        {/* A ring rather than a bare glyph: the chevron alone gave no target and
+            no state. GSAP still drives the rotation, so the open/close reads as
+            one gesture. */}
+        <span className="chev" ref={chevron} aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </span>
       </button>
 
       <div className="whybody" id="why-body" ref={body}>
         <div className="whyinner">
-          {rowsFor(math).map((row) => (
-            <div className="mathrow" key={row.label}>
-              <span className="k">
-                {row.label}
-                <em>{row.gloss}</em>
-                {/* The provenance of this exact input. "Source" rather than "View
-                    evidence" — inside a row of figures the question is where the
-                    number came from, and the shorter word keeps the row's second
-                    line from outgrowing the gloss above it. */}
-                <ViewEvidence
-                  evidence={row.field ? (math.evidence?.[row.field] ?? null) : null}
-                  claim={row.label}
-                  label="Source"
-                />
-              </span>
-              <span className={row.value === EMPTY ? 'v missing' : 'v'}>{row.value}</span>
+          {/* Two columns at desktop width. The drawer spans the page now, and a
+              single column of k/v rows across 1100px would strand every figure a
+              screen-width from its label. The inputs and their reading go left,
+              the checklist right — they are the two lists, and they are read
+              independently. Collapses to one column under 901px. */}
+          <div className="whygrid">
+            <div className="whycol">
+              {/* The rows carried no heading when they were the first thing in the
+                  drawer. Beside a headed column they need one, and it is the same
+                  .blkh treatment the four narrative blocks and the audit use. */}
+              <span className="blkh">The inputs</span>
+              <p className="hint">Every figure the estimate is built from. Change one and the range moves.</p>
+
+              {rowsFor(math).map((row) => (
+                <div className="mathrow" key={row.label}>
+                  <span className="k">
+                    {row.label}
+                    <em>{row.gloss}</em>
+                    {/* The provenance of this exact input. "Source" rather than "View
+                        evidence" — inside a row of figures the question is where the
+                        number came from, and the shorter word keeps the row's second
+                        line from outgrowing the gloss above it. */}
+                    <ViewEvidence
+                      evidence={row.field ? (math.evidence?.[row.field] ?? null) : null}
+                      claim={row.label}
+                      label="Source"
+                    />
+                  </span>
+                  <span className={row.value === EMPTY ? 'v missing' : 'v'}>{row.value}</span>
+                </div>
+              ))}
+
+              {/* The rows above are the inputs; this is what the inputs produced, and
+                  how much of it rests on the one assumption none of them show. It sits
+                  under them because it is a reading of the maths, not another input. */}
+              <TerminalValueShare math={math} />
             </div>
-          ))}
 
-          {/* The checklist, item by item. It sits between the inputs and the
-              reading of them because it is the gentlest thing in this drawer —
-              sentences about the business, where the rows above are figures and
-              the block below is a share of a number. Renders nothing when the
-              payload carries no checks. */}
-          <EvidenceAudit checks={checks} />
+            {/* The checklist, item by item — sentences about the business, where
+                the column beside it is figures. Renders nothing when the payload
+                carries no checks, and the grid closes up around it. */}
+            <div className="whycol">
+              <EvidenceAudit checks={checks} />
+            </div>
+          </div>
 
-          {/* The rows above are the inputs; this is what the inputs produced, and
-              how much of it rests on the one assumption none of them show. It sits
-              last because it is a reading of the maths, not another input. */}
-          <TerminalValueShare math={math} />
-
-          {/* Last, and deliberately: it is the densest block in the product, and it
-              only means anything once the rows above have said what the assumptions
-              are. Non-negotiable #1 is why it lives behind this drawer and nowhere
-              near the default screen. */}
+          {/* Last, full width, and deliberately: it is the densest block in the
+              product, it only means anything once the rows above have said what the
+              assumptions are, and it is the one thing here that actually wanted the
+              page's full width — it was scrolling sideways inside the narrative
+              column before this drawer moved out of it. Non-negotiable #1 is why it
+              lives behind this drawer and nowhere near the default screen. */}
           <SensitivityMatrix math={math} price={price} />
         </div>
       </div>

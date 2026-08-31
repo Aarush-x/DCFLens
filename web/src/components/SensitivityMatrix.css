@@ -18,18 +18,21 @@
 
 .sensmatrix h4 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 500;
+  font-family: var(--fd);
+  font-size: 19px;
+  font-weight: var(--dw);
+  letter-spacing: -.022em;
+  word-spacing: var(--dws);
   color: var(--cream);
 }
 
 /* The gloss that buys the jargon its place — non-negotiable #1. Matches
    .mathrow .k em exactly, because it is doing the same job one level up. */
 .sensmatrix .sensgloss {
-  font-size: 13px;
+  font-size: var(--t-small);
   font-weight: 400;
-  color: var(--faint);
-  margin: 4px 0 0;
+  color: var(--dim);
+  margin: 6px 0 0;
   max-width: 62ch;
   line-height: 1.5;
 }
@@ -57,12 +60,12 @@
      numerals stop lining up into columns. */
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
-  font-size: 12.5px;
+  font-size: var(--t-small);
 }
 
 .sensmatrix .senstable th,
 .sensmatrix .senstable td {
-  padding: 10px 6px;
+  padding: 12px 8px;
   text-align: right;
   border-bottom: 1px solid var(--hair);
   border-right: 1px solid var(--hair);
@@ -88,8 +91,9 @@
 .sensmatrix .senstable .senscorner {
   width: 24%;
   text-align: left;
-  font-family: var(--f);
-  font-size: 10px;
+  font-family: var(--m);
+  font-size: var(--t-label);
+  font-weight: 500;
   letter-spacing: .1em;
   text-transform: uppercase;
   line-height: 1.5;
@@ -126,14 +130,14 @@
   padding: 14px 2px 0;
   text-align: left;
   font-family: var(--f);
-  font-size: 13.5px;
+  font-size: var(--t-body);
   color: var(--cream);
 }
 
 .sensmatrix .sensnote {
   margin: 10px 0 0;
-  font-size: 13px;
-  color: var(--faint);
+  font-size: var(--t-small);
+  color: var(--dim);
   line-height: 1.6;
   max-width: 62ch;
 }

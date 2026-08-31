@@ -61,7 +61,7 @@
   /* ---- shared primitives (mirrored by src/components/ui/*) ---- */
   .pill {
     font: inherit;
-    font-size: 13px;
+    font-size: var(--t-small);
     font-weight: 500;
     padding: 9px 17px;
     border-radius: 999px;
@@ -80,17 +80,15 @@
   }
   .pill.solid:hover { transform: translateY(-1px) }
 
-  .eyebrow {
-    font-family: var(--m);
-    font-size: 11px;
-    letter-spacing: .2em;
-    text-transform: uppercase;
-    color: var(--faint);
-  }
+  /* .eyebrow and .lbl were 11px and 10px — the same job at two sizes, which is
+     why "WHY WE THINK SO" and "THE NUMBERS" sat at different scales in the same
+     row. One size now; they differ by nothing, so they were merged onto one rule. */
+  .eyebrow,
   .lbl {
     font-family: var(--m);
-    font-size: 10px;
-    letter-spacing: .2em;
+    font-size: var(--t-label);
+    font-weight: 500;
+    letter-spacing: .18em;
     text-transform: uppercase;
     color: var(--faint);
   }
@@ -117,7 +115,7 @@
     padding: 9px 22px;
     color: var(--dim);
     font: inherit;
-    font-size: 13.5px;
+    font-size: var(--t-body);
     cursor: pointer;
     border-left: 2px solid transparent;
     transition: .15s;
@@ -146,7 +144,7 @@
   .mark { font-weight: 700; font-size: 21px; letter-spacing: -.035em; cursor: pointer; line-height: 1.05 }
   .mark span { color: var(--cream); font-weight: 400 }
   .mark small {
-    display: block; font-family: var(--m); font-size: 9.5px; letter-spacing: .18em;
+    display: block; font-family: var(--m); font-size: var(--t-label); letter-spacing: .18em;
     color: var(--dim); font-weight: 400; margin-top: 4px;
   }
   .nav { display: flex; gap: 8px; align-items: center }
@@ -157,13 +155,13 @@
   }
   .kicker { margin-bottom: 38px; overflow: hidden }
   h1.big {
-    font-family: var(--fd); letter-spacing: -.045em;
+    font-family: var(--fd); letter-spacing: -.045em; word-spacing: var(--dws);
     font-size: clamp(48px, 9.2vw, 132px); font-weight: 800; line-height: .92; margin: 0;
   }
   h1.big .line { display: block; overflow: hidden }
   h1.big .line > span { display: block }
   h1.big .accent { color: var(--hero); font-style: var(--di) }
-  .lede { margin: 44px 0 0; max-width: 46ch; font-size: 18px; line-height: 1.6; color: var(--dim) }
+  .lede { margin: 44px 0 0; max-width: 46ch; font-size: var(--t-lead); line-height: 1.6; color: var(--dim) }
   .cta-row { display: flex; gap: 12px; margin-top: 40px; align-items: center }
 
   /* --railw / --mainpad are read by the search state, which breaks out of the
@@ -178,21 +176,28 @@
   .rail { border-right: 1px solid var(--hair); padding: 22px 0; position: sticky; top: 0; height: 100vh }
   .rail .mark { padding: 0 22px 26px }
   .railhead {
-    padding: 0 22px 10px; font-family: var(--m); font-size: 10px;
-    letter-spacing: .2em; text-transform: uppercase; color: var(--faint);
+    padding: 0 22px 10px; font-family: var(--m); font-size: var(--t-label);
+    font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--faint);
   }
   .rowitem b { font-weight: 500 }
   .rowitem i {
-    font-style: normal; font-family: var(--m); font-size: 10.5px;
+    font-style: normal; font-family: var(--m); font-size: var(--t-meta);
     color: var(--faint); margin-left: 7px;
   }
-  .main { padding: 0 var(--mainpad) 90px; max-width: 1160px }
+  /* min-width: 0 is load-bearing. A grid item's automatic minimum size is its
+     min-content width, so the 1fr track was being pushed out to whatever the
+     widest thing inside .main refused to shrink below — 534px against a 390px
+     phone, which body's overflow-x: hidden was quietly clipping. Overriding the
+     automatic minimum lets the column take the viewport's width and hands the
+     shrinking back to the children, each of which already knows how (the
+     sensitivity table scrolls in its own box, the rest wraps). */
+  .main { padding: 0 var(--mainpad) 90px; max-width: 1160px; min-width: 0 }
   @media (max-width: 900px) { .main { --mainpad: 22px } }
   .topbar { display: flex; align-items: center; gap: 14px; padding: 20px 0 30px }
   .search {
     flex: 1; max-width: 440px; display: flex; align-items: center;
     border: 1px solid var(--hair); border-radius: 999px; padding: 10px 18px;
-    color: var(--faint); font-family: var(--m); font-size: 12.5px;
+    color: var(--faint); font-family: var(--m); font-size: var(--t-small);
     transition: .2s; background: var(--surface);
   }
   .search:hover { border-color: var(--hair2) }
@@ -206,21 +211,46 @@
     font: inherit; color: var(--cream); letter-spacing: inherit;
   }
   .search input::placeholder { color: var(--faint) }
-  .kbd { margin-left: auto; font-size: 10px; border: 1px solid var(--hair); border-radius: 4px; padding: 1px 5px }
+  .kbd { margin-left: auto; font-size: var(--t-label); border: 1px solid var(--hair); border-radius: 4px; padding: 1px 6px }
   .verdict {
-    font-family: var(--fd); font-weight: 800; letter-spacing: -.045em;
+    font-family: var(--fd); font-weight: 800; letter-spacing: -.045em; word-spacing: var(--dws);
     font-size: clamp(38px, 6.4vw, 82px); line-height: 1; margin: 18px 0 12px;
   }
 
   /* The two-column body. 1.5fr / 1fr — the narrative is the wider pane, the
      figures the narrower one, per the layout in CLAUDE.md. */
-  .panes { display: grid; grid-template-columns: 1.5fr 1fr; gap: 52px }
+  .panes { display: grid; grid-template-columns: 1.5fr 1fr; gap: 52px; align-items: start }
   @media (max-width: 900px) { .panes { grid-template-columns: 1fr; gap: 40px } }
+
+  /* The figures follow the reader down the argument.
+
+     They used to stop dead. "The numbers" is two cards, about 500px; the
+     narrative beside it runs 1500px and more. The grid stretched the aside to
+     match, so the right half of the screen was a 1000px void from the last
+     scenario row to the footer — the emptiness reported on 2026-08-31. Sticky
+     is the fix that keeps the comparison the product is for: the estimate stays
+     on screen while the reasoning for it scrolls past.
+
+     `align-items: start` above stops the aside from being stretched to the row
+     height, which is what sticky needs in order to have anywhere to travel. */
+  @media (min-width: 901px) {
+    .panes > aside {
+      position: sticky;
+      top: 24px;
+      /* Never taller than the viewport, or the bottom of the card would be
+         unreachable — it would be pinned off-screen with nothing left to
+         scroll. Overflow past that scrolls inside the column. */
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .panes > aside::-webkit-scrollbar { display: none }
+  }
 
   .sources {
     margin-top: 70px; padding-top: 20px; border-top: 1px solid var(--hair);
     display: flex; gap: 22px; flex-wrap: wrap;
-    font-family: var(--m); font-size: 11px; color: var(--faint);
+    font-family: var(--m); font-size: var(--t-meta); color: var(--faint);
   }
   .sources a { color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--hair2) }
   .sources a:hover { color: var(--cream); border-color: var(--faint) }

@@ -16,13 +16,60 @@
   --di:normal;          /* accent style    */
   --bw:400;             /* body weight     */
 
+  /* ── display word-spacing ──────────────────────────────────────────────
+     Clash Display's space glyph is 154/1000 em. Satoshi's is 250 and a
+     generic sans is 278, so a Clash heading sets its words 40% closer
+     together than every other face on the page — measured in-browser at
+     600/18px: 2.77px against Satoshi's 4.50px. With --dt on top of it the
+     words visibly run together ("Nosharepriceyet"), which is the single
+     worst legibility fault on the app screen.
+
+     Compensating here rather than by widening --dt: tracking would also
+     open the letters inside each word, and Clash at anything looser than
+     -.015em is exactly what DESIGN.md §2 measured and rejected. Word
+     spacing moves only the thing that is wrong. Every rule that sets
+     font-family: var(--fd) also sets this.
+
+     The value: Satoshi's space is .250em and Clash's is .154em, and the
+     display rules carry -.018em to -.045em of tracking, which the space
+     glyph pays for too. .115em lands a Clash space within a hair of a
+     Satoshi one, so a heading and the paragraph under it word-space alike. */
+  --dws:.115em;         /* display word-spacing */
+
+  /* ── type scale ────────────────────────────────────────────────────────
+     Before this existed the app set text at 9.5, 10, 10.5, 11, 11.5, 12,
+     12.5, 13, 13.5, 14, 14.5 and 15.5px — twelve sizes for five jobs, with
+     no rule saying which meant what, so the same kind of label appeared at
+     three sizes on one screen. Five steps now, each with a job:
+
+       --t-label  mono uppercase eyebrows, axis ticks, table captions
+       --t-meta   mono figures and metadata sitting beside body copy
+       --t-small  glosses, notes, hints — text that qualifies other text
+       --t-body   running copy and list rows — the default reading size
+       --t-lead   intro paragraphs
+
+     The floor is 11.5px and it is deliberate: the old 9.5–10px uppercase
+     mono labels on --faint were the pairing DESIGN.md §3 already called
+     "the hardest case", and they were unreadable on a real screen. */
+  --t-label:11.5px;
+  --t-meta:13px;
+  --t-small:14px;
+  --t-body:15px;
+  --t-lead:17px;
+
   /* colour */
   --ink:#000000;        /* page background */
   --surface:#0B0B0C;    /* card / input fill */
   --cardbg:#0B0B0C;     /* landing card fill */
   --cream:#FFFFFF;      /* primary text    */
   --dim:#8E8E93;        /* secondary text  */
-  --faint:#5B5B60;      /* labels, axis    */
+  /* Lifted from #5B5B60 on 2026-08-31. That value measures 3.11:1 on --ink,
+     below AA, and DESIGN.md §3 "Known issue" has carried #7C7C80 as the fix
+     since the palette was locked — held back only because "the current value
+     is what was signed off". It was signed off for a 36-hour demo; the app is
+     now read on real screens and the labels were reported unreadable, so the
+     documented fix applies. 5.05:1 on --ink, 4.73:1 on --surface. */
+  --faint:#7C7C80;      /* labels, axis    */
   --hair:#1A1A1C;       /* 1px borders     */
   --hair2:#2E2E31;      /* hover borders   */
   --accent:#00E676;     /* CTAs, wipe, hero word */
