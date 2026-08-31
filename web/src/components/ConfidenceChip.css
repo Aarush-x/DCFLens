@@ -25,7 +25,7 @@
   border: 1px solid var(--hair);
   border-radius: 999px;
   font-family: var(--m);
-  font-size: var(--t-label);
+  font-size: var(--t-label, 11.5px);
   letter-spacing: .16em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -94,20 +94,20 @@
 
 .conf__head {
   font-family: var(--m);
-  font-size: var(--t-label);
+  font-size: var(--t-label, 11.5px);
   letter-spacing: .16em;
   text-transform: uppercase;
   color: var(--level);
 }
 .conf__gloss {
   margin: 8px 0 0;
-  font-size: var(--t-small);
+  font-size: var(--t-small, 14px);
   line-height: 1.5;
   color: var(--cream);
 }
 .conf__note {
   margin: 10px 0 0;
-  font-size: var(--t-small);
+  font-size: var(--t-small, 14px);
   line-height: 1.5;
   color: var(--dim);
 }
@@ -123,7 +123,7 @@
   margin: 12px 0 0;
   padding: 0 0 1px;
   font: inherit;
-  font-size: var(--t-small);
+  font-size: var(--t-small, 14px);
   color: var(--dim);
   cursor: pointer;
   transition: color .16s, border-color .16s;
@@ -132,7 +132,7 @@
 .conf__reveal:focus-visible { color: var(--cream); border-color: var(--faint) }
 
 .conf__work { margin-top: 14px; border-top: 1px solid var(--hair); padding-top: 12px }
-.conf__lede { margin: 0 0 10px; font-size: var(--t-small); line-height: 1.5; color: var(--dim) }
+.conf__lede { margin: 0 0 10px; font-size: var(--t-small, 14px); line-height: 1.5; color: var(--dim) }
 
 .conf__factor { margin-top: 9px }
 .conf__row {
@@ -140,13 +140,13 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  font-size: var(--t-small);
+  font-size: var(--t-small, 14px);
   color: var(--cream);
 }
 .conf__score {
   font-family: var(--m);
   font-variant-numeric: tabular-nums;
-  font-size: var(--t-meta);
+  font-size: var(--t-meta, 13px);
   color: var(--level);
   flex: none;
 }
@@ -167,7 +167,13 @@
   margin-top: 14px;
   padding-top: 11px;
   border-top: 1px solid var(--hair);
-  font-size: var(--t-small);
+  font-size: var(--t-small, 14px);
   color: var(--cream);
 }
-.conf__bands { margin: 6px 0 0; font-size: var(--t-small); line-height: 1.5; color: var(--dim) }
+.conf__bands { margin: 6px 0 0; font-size: var(--t-small, 14px); line-height: 1.5; color: var(--dim) }
+
+/* The var() fallbacks above are not decoration. The --t-* scale landed in a
+   parallel change that is not committed yet, and this panel deploys before it;
+   without a fallback every size in here would collapse to inherited text the
+   moment it shipped. They stay after that scale lands — the second value is the
+   scale's own, so the two can never disagree. */
