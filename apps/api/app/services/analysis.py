@@ -18,6 +18,7 @@ from app.ai.models import (
 from app.ai.service import prepare_deterministic_analysis, run_qualitative_analysis
 from app.checklist.models import ChecklistInput, QualitativeChecklistFacts
 from app.core.settings import Settings
+from app.data.sec.filing_cash import needs_filing_cash, supplement_filing_cash
 from app.data.sec import (
     CompanySubmissionProfile,
     NormalizationResult,
@@ -59,6 +60,8 @@ class SecGateway(Protocol):
     def resolve_ticker(self, ticker: str) -> TickerResolution: ...
 
     def get_company_facts(self, cik: str | int) -> Any: ...
+
+    def get_latest_10k_for_cik(self, cik: str | int) -> Any: ...
 
     def get_submission_profile(
         self, cik: str | int
@@ -240,6 +243,10 @@ class AnalysisService:
             document = self._sec.get_company_facts(resolution.cik)
             profile = self._sec.get_submission_profile(resolution.cik)
             normalized = normalize_company_facts(document)
+            if needs_filing_cash(normalized):
+                normalized = supplement_filing_cash(
+                    normalized, self._sec.get_latest_10k_for_cik(resolution.cik),
+                )
         except SecRequestError as exc:
             if exc.status_code == 429:
                 raise ProviderRateLimitError("SEC EDGAR rate limit reached") from exc
@@ -375,7 +382,8 @@ def _analysis_evidence(
                     continue
                 evidence_by_id[reference.evidence_id] = AnalysisEvidence(
                     evidence_id=reference.evidence_id,
-                    source_type="sec_company_fact",
+                    source_type=("sec_inline_fact" if "/Archives/" in reference.source_url
+                                 else "sec_company_fact"),
                     content=(
                         f"{metric} for {fact.fiscal_period} {fact.fiscal_year} "
                         f"is {fact.value} {fact.unit}; {reference.transformation}."

@@ -1,0 +1,187 @@
+{
+  "cik": 1045810,
+  "entityName": "NVIDIA CORP",
+  "facts": {
+    "us-gaap": {
+      "CashAndCashEquivalentsAtCarryingValue": {
+        "units": {
+          "USD": [
+            {
+              "end": "2026-01-25",
+              "val": 10605000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "NetCashProvidedByUsedInOperatingActivities": {
+        "units": {
+          "USD": [
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 102718000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "PaymentsToAcquireProductiveAssets": {
+        "units": {
+          "USD": [
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 6042000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "LongTermDebt": {
+        "units": {
+          "USD": [
+            {
+              "end": "2026-01-25",
+              "val": 8468000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "WeightedAverageNumberOfDilutedSharesOutstanding": {
+        "units": {
+          "shares": [
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 24514000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "RevenueFromContractWithCustomerExcludingAssessedTax": {
+        "units": {
+          "USD": []
+        }
+      },
+      "GrossProfit": {
+        "units": {
+          "USD": [
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 153463000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "NetIncomeLoss": {
+        "units": {
+          "USD": [
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 120067000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "StockholdersEquity": {
+        "units": {
+          "USD": [
+            {
+              "end": "2026-01-25",
+              "val": 157293000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "Assets": {
+        "units": {
+          "USD": [
+            {
+              "end": "2026-01-25",
+              "val": 206803000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "InventoryNet": {
+        "units": {
+          "USD": [
+            {
+              "end": "2026-01-25",
+              "val": 21403000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "AccountsReceivableNetCurrent": {
+        "units": {
+          "USD": [
+            {
+              "end": "2026-01-25",
+              "val": 38466000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
