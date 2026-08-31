@@ -470,7 +470,12 @@ export default function VerdictBanner({ data }) {
         {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
         {/* The refusal state says everything already; a confidence reading on top
             of "we can't value this" is noise. */}
-        {!cannotValue && <ConfidenceChip confidence={confidence} />}
+        {/* aiStatus rides along so the chip's panel can say WHY a Low reading sits
+            below its own average — the backend holds a fallback analysis at Low
+            whatever the factors averaged to. */}
+        {!cannotValue && (
+          <ConfidenceChip confidence={confidence} aiStatus={data.aiStatus ?? null} />
+        )}
       </div>
       {rangeHeadline && (
         <Label style={{ marginTop: 18 }}>Estimated value per share</Label>

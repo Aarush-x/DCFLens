@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { money, count, percent, EMPTY } from '../lib/format.js'
+import { readsAsEnglish, SOURCE_TAG } from '../lib/plain.js'
 import './EvidenceDrawer.css'
 
 /* ── The evidence drawer ──────────────────────────────────────────────────────
@@ -24,10 +25,17 @@ import './EvidenceDrawer.css'
  * 0.045 behind it — the same numbers, so the two layers feel like one product.
  *
  * ── What it must never do ────────────────────────────────────────────────────
- * Nothing here computes. Every figure, label, concept and transformation string is
- * printed as the adapter handed it over; a value we do not have is an em dash and
- * a section we do not have is simply absent. This is the audit surface — the one
- * place in the app where inventing anything would be worst.
+ * Nothing here computes. Every figure and label is printed as the adapter handed it
+ * over; a value we do not have is an em dash and a section we do not have is simply
+ * absent. This is the audit surface — the one place in the app where inventing
+ * anything would be worst.
+ *
+ * What it does do is refuse to print our own machine vocabulary. XBRL tags,
+ * transformation expressions and substituted debug traces are dropped rather than
+ * shown, because non-negotiable #1 holds here too: the reader never meets the way we
+ * talk to ourselves. Dropping is not inventing — nothing is paraphrased into a claim
+ * the payload didn't make, and everything that makes this checkable against the
+ * source (form, period, filed date, the figures, the links) stays.
  */
 
 /* ── formatting ─────────────────────────────────────────────────────────────── */
@@ -65,12 +73,28 @@ export function evidenceValue(value, unit) {
   return `${count(value)} ${unit}`
 }
 
-/* The envelope's `transformation` is a machine string describing how the number
-   got from the filing to us. It is the single strongest auditability signal in the
-   payload and it is printed verbatim — but verbatim is not English, so the ones we
-   know carry a gloss, in the manner of the Why drawer's `.mathrow em`. */
+/* The envelope's `transformation` is a machine string describing how the number got
+   from the filing to us. It arrives in two shapes — a bare tag ("reported_value"),
+   or a derived field with the expression that produced it and the source tag stuck
+   on the end:
+
+     free_cash_flow = operating_cash_flow - abs(capital_expenditure);
+     source transformation: reported_value
+
+   It used to be printed verbatim, on the argument that the raw string is the
+   strongest auditability signal in the payload. It is — for us. For the reader it
+   is source code, and non-negotiable #1 says our vocabulary never reaches the
+   screen. The expression also says nothing the panel doesn't already say better:
+   "The calculation" states the same operation as a sentence, directly beneath.
+
+   So the string is read for its source tag, the tag is printed as English, and the
+   expression is dropped. No provenance is lost with it — the form, the period, the
+   filed date, the figures themselves and both links are all still on the panel. */
 const TRANSFORMATIONS = {
   reported_value: 'Taken from the filing exactly as reported. Nothing was adjusted.',
+  'absolute_value(reported_value)':
+    'Taken from the filing as reported, then read as an amount rather than a direction — the filing writes money spent as a negative.',
+  absolute_value: 'Read as an amount rather than a direction, so money spent counts as spending.',
   sum: 'Added together from more than one reported line.',
   difference: 'One reported line subtracted from another.',
   ratio: 'One reported line divided by another.',
@@ -78,23 +102,44 @@ const TRANSFORMATIONS = {
   sign_flipped: 'Sign reversed, so the figure reads the way the sentence describes it.',
 }
 
-/* Provenance. A structured XBRL fact and a number lifted out of prose are not the
-   same kind of claim, and the reader has to be able to tell them apart at a glance.
+/**
+ * The English for a transformation string, or null when we have none.
+ *
+ * Null is the right answer for an unrecognised tag: the alternative is printing the
+ * tag itself, which is the thing this function exists to keep off the screen. A row
+ * with no gloss simply shows its label and its figure, which is still true.
+ */
+export function transformationGloss(transformation) {
+  const raw = String(transformation ?? '').trim()
+  if (!raw) return null
+  const at = raw.lastIndexOf(SOURCE_TAG)
+  const tag = (at === -1 ? raw : raw.slice(at + SOURCE_TAG.length)).trim()
+  if (!tag) return null
+  if (TRANSFORMATIONS[tag]) return TRANSFORMATIONS[tag]
+  // An unknown wrapper around a tag we do know — abs(reported_value) and friends.
+  const inner = /^[a-z_]+\((.+)\)$/.exec(tag)?.[1]
+  return (inner && TRANSFORMATIONS[inner]) || null
+}
 
-   Neither is an error, so neither reaches for --over. XBRL gets the green dot the
-   palette already uses for "this holds up"; parsed text gets the amber one and
-   --dim copy — the caution colour, one step quieter, which is what lower
+/* Provenance. A structured XBRL fact and a number lifted out of prose are not the
+   same kind of claim, and the reader has to be able to tell them apart at a glance —
+   a distinction they can make without ever meeting the word XBRL. The filing
+   reported it as data, or we read it off the page: that is the whole difference.
+
+   Neither is an error, so neither reaches for --over. The filing's own data gets the
+   green dot the palette already uses for "this holds up"; parsed text gets the amber
+   one and --dim copy — the caution colour, one step quieter, which is what lower
    confidence looks like in this palette. */
 const PROVENANCE = {
   xbrl: {
-    label: 'From XBRL',
+    label: 'Straight from the filing',
     dot: 'var(--under)',
-    gloss: 'A tagged, machine-readable figure in the filing itself.',
+    gloss: 'A figure the company reported as data in the filing itself, not one we read out of the text.',
   },
   text: {
-    label: 'Parsed from filing text',
+    label: 'Read from the filing’s text',
     dot: 'var(--fair)',
-    gloss: 'Read out of the filing’s prose rather than its tagged data. Worth checking against the source.',
+    gloss: 'Taken from the filing’s prose rather than the data it reported. Worth checking against the source.',
   },
 }
 
@@ -181,16 +226,16 @@ export default function EvidenceDrawer({ evidence, claim = null, open, onClose }
   const filed = filedOn(evidence.filed_on)
   const filingLine = [evidence.filing_type, evidence.fiscal_period].filter(Boolean).join(' · ')
 
-  /* The gloss explains a transformation tag, and the tag is usually the same on
-     every row — `reported_value` on all of them, in most live responses. Printing
-     the identical sentence three times would bury the one row that differs, which
-     is the row a reader came here to find. So each gloss is attached to the FIRST
-     row that uses its tag; every row still shows the tag itself. */
+  /* The gloss is usually the same on every row — `reported_value` on all of them, in
+     most live responses. Printing the identical sentence three times would bury the
+     one row that differs, which is the row a reader came here to find. So a gloss is
+     attached to the FIRST row that uses it and the repeats stay silent; with the tag
+     itself gone from the row, a repeated sentence would be the only thing there. */
   const glossed = new Set()
   const valueRows = values.map((v, i) => {
-    const t = v.transformation ?? null
-    const gloss = t && !glossed.has(t) ? (TRANSFORMATIONS[t] ?? null) : null
-    if (t) glossed.add(t)
+    const said = transformationGloss(v.transformation)
+    const gloss = said && !glossed.has(said) ? said : null
+    if (said) glossed.add(said)
     /* Index-keyed on purpose. One concept can legitimately appear twice in the
        same evidence object — the same XBRL tag read for two fiscal periods, which
        is how a growth claim is evidenced — so the concept is not unique and the
@@ -239,9 +284,10 @@ export default function EvidenceDrawer({ evidence, claim = null, open, onClose }
           </div>
         ) : null}
 
-        {/* The figures themselves. Each one carries the XBRL concept it was tagged
-            under and the transformation applied to it — the two things that make
-            this an audit trail rather than a restatement. */}
+        {/* The figures themselves: what the filing called it, what it said, and — in
+            English, once per distinct answer — what we did to it on the way here.
+            The XBRL tag and the expression used to sit under every row; see the note
+            on TRANSFORMATIONS for why they don't any more. */}
         {values.length ? (
           <section className="evsect">
             <div className="cap">The figures used</div>
@@ -253,13 +299,7 @@ export default function EvidenceDrawer({ evidence, claim = null, open, onClose }
                     {evidenceValue(v.value, v.unit)}
                   </span>
                 </div>
-                {v.concept ? <div className="evconcept">{v.concept}</div> : null}
-                {v.transformation ? (
-                  <div className="evtransform">
-                    <code>{v.transformation}</code>
-                    {v.gloss ? <em>{v.gloss}</em> : null}
-                  </div>
-                ) : null}
+                {v.gloss ? <p className="evgloss">{v.gloss}</p> : null}
               </div>
             ))}
           </section>
@@ -267,7 +307,7 @@ export default function EvidenceDrawer({ evidence, claim = null, open, onClose }
 
         {/* What was done with them. Plain English where the engine gave us plain
             English; its own wording either way, never a paraphrase. */}
-        {evidence.calculation ? (
+        {readsAsEnglish(evidence.calculation) ? (
           <section className="evsect">
             <div className="cap">The calculation</div>
             <p className="evcalc">{evidence.calculation}</p>
@@ -288,7 +328,7 @@ export default function EvidenceDrawer({ evidence, claim = null, open, onClose }
                     {evidenceValue(m.value, m.unit)}
                   </span>
                 </div>
-                {m.calculation ? <div className="evconcept">{m.calculation}</div> : null}
+                {readsAsEnglish(m.calculation) ? <p className="evgloss">{m.calculation}</p> : null}
               </div>
             ))}
           </section>

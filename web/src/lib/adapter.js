@@ -66,6 +66,8 @@
  * independent of price".
  */
 
+import { readsAsEnglish } from './plain.js'
+
 /** Why a price-dependent field is null. Three different facts, never blended:
  *  "we have no price", "we have a price and will not rank it", and "we have a
  *  price but do not solve this particular number from it" are three different
@@ -187,14 +189,33 @@ function fiscalPeriod(filing, ref) {
 /* The tags the Why drawer's rows resolve to. `humanizeConcept` renders
  * NetCashProvidedByUsedInOperatingActivities as "Net cash provided by used in
  * operating activities" — the tag's own broken grammar, faithfully preserved. The
- * raw concept is printed under every drawer row regardless, so naming these in
- * English costs no provenance and spares the reader the tag. */
+ * drawer no longer prints the raw tag under the row, so this label is the only name
+ * the figure gets: every concept that reaches a drawer in the ordinary path belongs
+ * in this table. One that doesn't falls back to the humanised tag — clumsy, but
+ * still English. */
 const CONCEPT_LABELS = {
   'us-gaap:NetCashProvidedByUsedInOperatingActivities': 'Cash from operations',
   'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment': 'Spent on property and equipment',
+  'us-gaap:PaymentsToAcquireProductiveAssets': 'Spent on long-lived assets',
   'us-gaap:LongTermDebt': 'Long-term debt',
+  'us-gaap:LongTermDebtNoncurrent': 'Long-term debt',
   'us-gaap:CashCashEquivalentsAndShortTermInvestments': 'Cash and short-term investments',
+  'us-gaap:CashAndCashEquivalentsAtCarryingValue': 'Cash on hand',
+  'us-gaap:ShortTermInvestments': 'Short-term investments',
+  'us-gaap:MarketableSecuritiesCurrent': 'Short-term investments',
   'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding': 'Diluted shares outstanding',
+  'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax': 'Revenue',
+  'us-gaap:Revenues': 'Revenue',
+  'us-gaap:SalesRevenueNet': 'Revenue',
+  'us-gaap:CostOfRevenue': 'Cost of sales',
+  'us-gaap:GrossProfit': 'Gross profit',
+  'us-gaap:OperatingIncomeLoss': 'Operating profit',
+  'us-gaap:NetIncomeLoss': 'Profit for the year',
+  'us-gaap:EarningsPerShareDiluted': 'Profit per share',
+  'us-gaap:AccountsReceivableNetCurrent': 'Money owed by customers',
+  'us-gaap:InventoryNet': 'Inventory',
+  'us-gaap:Assets': 'Total assets',
+  'us-gaap:StockholdersEquity': 'Shareholders’ equity',
 }
 
 /** The reported figure behind a reference. */
@@ -210,9 +231,11 @@ function toValueUsed(ref) {
     // Extra key, additive to the contract. Without it a decimal_ratio like 0.679
     // formats as "$0.68". The formatter needs to know it is a ratio.
     unit: str(ref?.unit) ?? 'USD',
-    // Also additive, and the two strongest auditability signals in the envelope:
-    // the tag the figure was filed under, and what we did to it on the way here.
-    // The evidence drawer prints both verbatim — see EvidenceDrawer.jsx.
+    // Also additive: the tag the figure was filed under, and what we did to it on
+    // the way here. Neither is printed any more — the drawer glosses the
+    // transformation into English and drops the tag entirely (see
+    // EvidenceDrawer.jsx). `concept` stays because it identifies a row: the same
+    // tag can legitimately appear twice in one evidence object, for two periods.
     concept,
     transformation: str(ref?.transformation),
   }
@@ -238,9 +261,16 @@ function toEvidence(result, filing) {
   const head = refs[0] ?? null
   const values_used = refs.map(toValueUsed)
 
+  /* The first calculation string that was written for a reader rather than for a
+     log. `metrics_used[].calculation` is usually the readable one ("gross profit /
+     revenue") and `technical_explanation` the trace with the magnitudes substituted
+     in, but not always — either field can hold either kind, so both go through the
+     same rule and the first survivor wins. Nothing readable, nothing printed: the
+     drawer omits the section rather than showing the trace. */
   const calculation =
-    metrics.map((m) => str(m?.calculation)).find(Boolean) ??
-    str(result?.technical_explanation)
+    metrics.map((m) => str(m?.calculation)).find(readsAsEnglish) ??
+    [str(result?.technical_explanation)].find(readsAsEnglish) ??
+    null
 
   return {
     filing_type: str(head?.filing_form) ?? str(filing?.filing_form),
