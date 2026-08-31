@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from copy import deepcopy
 from collections.abc import Mapping
 from typing import Any
 
@@ -11,8 +12,10 @@ from app.ai.models import (
     RequestedAdjustment,
     RequestedChecklistFinding,
     RequestedEvidenceAssessment,
+    RequestedNarrativeFinding,
     ValidatedAiResponse,
 )
+from app.data.sec.narrative import TOPICS
 from app.checklist.models import ChecklistStatus
 
 
@@ -171,9 +174,30 @@ class AiResponseValidationError(ValueError):
         super().__init__(message)
 
 
+def response_schema_with_narrative() -> dict[str, Any]:
+    schema = deepcopy(GEMINI_RESPONSE_SCHEMA)
+    schema["properties"]["annual_report_findings"] = {
+        "type": "array", "minItems": 0, "maxItems": 4,
+        "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {
+                "topic": {"type": "string", "enum": list(TOPICS)},
+                "summary": {"type": "string", "description": "At most 240 characters. Attribute management claims; disclose limitations."},
+                "claim_type": {"type": "string", "enum": ["INTERPRETATION"]},
+                "evidence_ids": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "string"}},
+            },
+            "required": ["topic", "summary", "claim_type", "evidence_ids"],
+        },
+    }
+    schema["required"].append("annual_report_findings")
+    return schema
+
+
 def parse_and_validate_ai_response(
     response_text: str,
     available_evidence_ids: frozenset[str],
+    *,
+    narrative_evidence: dict[str, str] | None = None,
 ) -> ValidatedAiResponse:
     if not isinstance(response_text, str) or not response_text.strip():
         raise AiResponseValidationError("empty_response", "AI response is empty")
@@ -195,7 +219,7 @@ def parse_and_validate_ai_response(
             "evidence_assessment",
             "checklist_findings",
             "disagreement_summary",
-        },
+        } | ({"annual_report_findings"} if narrative_evidence else set()),
     )
 
     adjustments_raw = _array(root["adjustments"], "adjustments", exact_length=3)
@@ -251,12 +275,29 @@ def parse_and_validate_ai_response(
         "disagreement_summary.evidence_ids",
         available_evidence_ids,
     )
+    narrative_findings = []
+    if narrative_evidence:
+        for item in _array(raw["annual_report_findings"], "annual_report_findings", maximum=4):
+            item = _exact_object(item, "annual_report_findings[]", {"topic", "summary", "claim_type", "evidence_ids"})
+            topic = _string(item["topic"], "topic", 32)
+            if topic not in TOPICS or topic in {finding.topic for finding in narrative_findings}:
+                raise AiResponseValidationError("invalid_narrative_topic", "Invalid or duplicate report topic")
+            citations = _evidence_ids(item["evidence_ids"], "evidence_ids", frozenset(narrative_evidence))
+            if any(narrative_evidence[evidence_id] != topic for evidence_id in citations):
+                raise AiResponseValidationError("wrong_narrative_section", "Report finding must cite the corresponding section")
+            claim_type = _enum(ClaimType, item["claim_type"], "claim_type")
+            if claim_type is not ClaimType.INTERPRETATION:
+                raise AiResponseValidationError("invalid_claim_type", "Narrative findings are interpretations, not verified facts")
+            narrative_findings.append(RequestedNarrativeFinding(
+                topic, _string(item["summary"], "summary", 240), citations, claim_type,
+            ))
     return ValidatedAiResponse(
         adjustments=tuple(sorted(adjustments, key=_adjustment_order)),
         evidence_assessment=assessments,
         checklist_findings=tuple(sorted(findings, key=lambda item: item.checklist_number)),
         disagreement_summary=summary,
         disagreement_evidence_ids=disagreement_evidence,
+        narrative_findings=tuple(narrative_findings),
     )
 
 

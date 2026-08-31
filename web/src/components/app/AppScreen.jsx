@@ -10,6 +10,7 @@ import WhyDrawer from '../WhyDrawer.jsx'
 import EvidenceProvider from '../EvidenceProvider.jsx'
 import TheNumbers from '../TheNumbers.jsx'
 import SourceRecord from '../SourceRecord.jsx'
+import AnnualReportReview from '../AnnualReportReview.jsx'
 import RecentRail, { loadHistory, saveHistory, pushHistory, nameFor } from './RecentRail.jsx'
 import TopBar from './TopBar.jsx'
 import SearchState from './SearchState.jsx'
@@ -266,6 +267,7 @@ function Analysis({ data }) {
             figure came from, by accession number, with a link to it. It sits above
             the sources footer because the footer names the archives in general and
             this names the one filing. */}
+        <AnnualReportReview report={data.annualReport} />
         <SourceRecord data={data} />
 
         <SourcesFooter sources={data.sources} />

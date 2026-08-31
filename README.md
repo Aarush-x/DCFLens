@@ -32,7 +32,7 @@ Ticker
 
 SEC ingestion handles missing data, alternative XBRL concepts, comparative periods, amendments, and restatements. Requests use an honest User-Agent, pacing, bounded retries, timeouts, and memory caches.
 
-Gemini reviews a compact subset of up to 16 intact evidence items. It returns three assumption decisions, one to three evidence assessments, and up to three checklist comments. The full ten-item checklist still runs deterministically. Omitted evidence is not treated as adverse evidence, and every AI claim must reference an evidence ID actually supplied to the model.
+Gemini reviews a compact subset of up to 16 intact evidence items. It returns three assumption decisions, one to three evidence assessments, and up to three checklist comments. When annual-report excerpts are available, the same call also returns up to four topic summaries with filing citations. The full ten-item checklist still runs deterministically. Omitted evidence is not treated as adverse evidence, and every AI claim must reference an evidence ID actually supplied to the model.
 
 ## Repository structure
 
@@ -210,7 +210,7 @@ See the [Render Workflow demo guide](docs/render-workflow-demo.md) for setup, ta
 - The current browser analysis deadline is 90 seconds. Cold starts, SEC retrieval, and AI recovery can exceed it. The Workflow is a separate option for longer-running tasks.
 - Caches are bounded and process-local. They do not depend on persistent Render disk and are not shared across replicas or Workflow runs.
 - Issuer support depends on SEC coverage and usable financial inputs. This is not a guarantee of support for every US stock or every business type.
-- The live AI pipeline currently reviews structured financial-fact summaries, not a complete 10-K narrative or subsidiary audit.
+- The live AI pipeline reviews financial-fact summaries and selected 10-K paragraphs for business, MD&A, risks, and governance. It does not ingest the entire report into Gemini, retrieve proxy statements or news, or perform a complete subsidiary audit. The frontend presents this separate review with coverage gaps and expandable source excerpts. Backend and frontend must both include the annual-report changes for live findings to appear.
 - Missing SEC inputs or market quotes remain explicit. Sample UI fixtures are for development and testing, not a substitute for failed live analyses.
 
 See [API diagnostics and error contracts](docs/api-service.md) for troubleshooting.
@@ -224,6 +224,7 @@ See [API diagnostics and error contracts](docs/api-service.md) for troubleshooti
 | SEC and evidence | [Ingestion](docs/sec-ingestion.md), [provenance](docs/evidence-provenance.md) |
 | Checklist | [Original ten items](docs/deltadcf-checklist.md), [checklist engine](docs/checklist-engine.md) |
 | AI safeguards | [Trust model](docs/trust-model.md), [AI boundaries](docs/ai-trust-boundaries.md) |
+| Annual-report review | [Extraction, evidence, and frontend API contract](docs/annual-report-analysis.md) |
 | Backend and Workflows | [API service](docs/api-service.md), [Workflow demo](docs/render-workflow-demo.md) |
 | Frontend | [Current frontend](web/README.md), [legacy integration](docs/frontend-backend-integration.md) |
 | Deployment history | [Architecture](docs/deployment-architecture.md), [runbook](docs/production-deployment.md), [DeltaDCF mapping](docs/deployment-mapping.md) |

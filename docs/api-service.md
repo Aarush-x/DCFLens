@@ -75,6 +75,12 @@ Only `analysis.status: APPLIED` confirms that Gemini output passed validation.
 Reduced workload does not guarantee availability or turn a failed call into a
 successful one. The complete original ten-point checklist still runs in Python.
 
+When 10-K excerpts are available, the same call uses `compact-narrative-v1` and
+adds a separate `analysis.annual_report` object. Its findings, extraction coverage,
+and source excerpts are described in [annual-report analysis](annual-report-analysis.md).
+The evidence-byte and output-token limits are unchanged; filing retrieval adds
+latency and can fail independently of Company Facts.
+
 For a small diagnostic from the API service's Render Shell (`/app`, if Shell is
 available on your plan), run the following. It reads the existing environment
 without displaying the key. This makes real generation requests and can incur

@@ -4,7 +4,8 @@ import json
 import logging
 
 from app.ai.models import AnalysisEvidence, ProviderRequest
-from app.ai.schema import AI_ADJUSTMENT_BOUNDS, GEMINI_RESPONSE_SCHEMA
+from app.ai.schema import AI_ADJUSTMENT_BOUNDS, GEMINI_RESPONSE_SCHEMA, response_schema_with_narrative
+from app.data.sec.narrative import NarrativeContext
 from app.checklist.contract import ORIGINAL_CHECKLIST
 from app.checklist.models import ChecklistEvaluation
 from app.valuation.adaptive import AdaptiveBaseline
@@ -41,6 +42,7 @@ def _json(value: object) -> str:
 
 def _compact_evidence(
     baseline: AdaptiveBaseline, evidence: tuple[AnalysisEvidence, ...],
+    narrative_context: NarrativeContext | None = None,
 ) -> tuple[list[dict[str, str | int]], list[str], tuple[str, ...]]:
     # Assumption-relevant evidence first; stable source order breaks ties. Never
     # rank by positive/negative values, and never truncate away a qualification.
@@ -49,7 +51,17 @@ def _compact_evidence(
         for trace in baseline.traces
         for reference in trace.evidence_references
     }
-    ordered = sorted(evidence, key=lambda item: item.evidence_id not in priority_ids)
+    first_by_topic = {}
+    for excerpt in narrative_context.excerpts if narrative_context else ():
+        first_by_topic.setdefault(excerpt.topic, excerpt.evidence_id)
+    narrative_first = set(first_by_topic.values())
+    # One paragraph per topic competes first, then baseline numeric evidence.
+    # This avoids crowding governance out with MD&A or numeric facts alone.
+    ordered = sorted(evidence, key=lambda item: (
+        0 if item.evidence_id in narrative_first else
+        1 if item.evidence_id in priority_ids else
+        2 if not item.is_untrusted_text else 3
+    ))
     rows: list[dict[str, str | int]] = []
     sources: list[str] = []
     selected_ids: list[str] = []
@@ -85,16 +97,25 @@ def build_provider_request(
     baseline_valuation: DcfResult,
     deterministic_checklist: ChecklistEvaluation,
     evidence: tuple[AnalysisEvidence, ...],
+    narrative_context: NarrativeContext | None = None,
 ) -> ProviderRequest:
-    rows, sources, selected_ids = _compact_evidence(baseline, evidence)
+    rows, sources, selected_ids = _compact_evidence(baseline, evidence, narrative_context)
+    narrative_topics = {
+        item.evidence_id: item.topic for item in narrative_context.excerpts
+        if item.evidence_id in selected_ids
+    } if narrative_context else {}
+    review_policy = "compact-narrative-v1" if narrative_topics else COMPACT_REVIEW_VERSION
     payload = {
         "task": "Briefly review the baseline using only selected evidence; do not recalculate the valuation.",
         "review_scope": {
-            "policy": COMPACT_REVIEW_VERSION,
+            "policy": review_policy,
             "available_evidence_items": len(evidence),
             "selected_evidence_items": len(selected_ids),
             "omitted_evidence_items": len(evidence) - len(selected_ids),
-            "selection": "Baseline evidence first, then source order, subject to size limits; intact items only.",
+            "selection": (
+                "One excerpt per narrative topic first, then baseline facts and remaining evidence; intact items within shared bounds."
+                if narrative_topics else "Baseline evidence first, then source order, subject to size limits; intact items only."
+            ),
         },
         "immutable_baseline": {
             "assumptions": {
@@ -128,6 +149,31 @@ def build_provider_request(
         "sources": sources,
         "untrusted_evidence": rows,
     }
+    system_instruction = SYSTEM_INSTRUCTION
+    if narrative_topics:
+        payload["annual_report_scope"] = {
+            "evidence_topics": narrative_topics,
+            "filings": list({item.accession_number: {
+                "accession_number": item.accession_number, "form": item.filing_form,
+                "filing_date": item.filing_date, "report_date": item.report_date,
+                "source_url": item.source_url,
+            } for item in narrative_context.excerpts if item.evidence_id in narrative_topics}.values()),
+            "coverage": [
+                {"topic": item.topic, "status": item.status, "reason": item.reason}
+                for item in narrative_context.coverage
+            ],
+            "warnings": narrative_context.warnings,
+        }
+        system_instruction += (
+            "\nAlso return annual_report_findings: at most one short interpretation per supplied topic "
+            "(business, management_discussion, risks, governance). Cite only supplied filing excerpts "
+            "mapped to that topic, not numeric facts. Attribute assertions to management rather than "
+            "treating them as verified truth. Describe implications and limitations, not investment advice. "
+            "A proxy cross-reference is not substantive governance evidence. Missing disclosures or many "
+            "subsidiaries do not establish misconduct. Do not count subsidiaries without Exhibit 21. "
+            "Omit findings without adequate evidence. This is a limited annual-report review, not news "
+            "research or a full audit. Do not repeat the checklist or the DCF."
+        )
     prompt = (
         "BEGIN_DCFLENS_INPUT_JSON\n"
         + _json(payload)
@@ -136,15 +182,16 @@ def build_provider_request(
         "Return only the schema-constrained response."
     )
     logger.info("gemini_context_prepared", extra={
-        "review_policy": COMPACT_REVIEW_VERSION,
+        "review_policy": review_policy,
         "available_evidence_items": len(evidence),
         "selected_evidence_items": len(selected_ids),
         "omitted_evidence_items": len(evidence) - len(selected_ids),
         "prompt_bytes": len(prompt.encode("utf-8")),
+        "narrative_evidence_items": len(narrative_topics),
     })
     return ProviderRequest(
-        system_instruction=SYSTEM_INSTRUCTION,
+        system_instruction=system_instruction,
         prompt=prompt,
-        response_schema=GEMINI_RESPONSE_SCHEMA,
+        response_schema=response_schema_with_narrative() if narrative_topics else GEMINI_RESPONSE_SCHEMA,
         evidence_ids=selected_ids,
     )

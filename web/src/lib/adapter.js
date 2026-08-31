@@ -72,6 +72,8 @@ import { readsAsEnglish } from './plain.js'
  *  "we have no price", "we have a price and will not rank it", and "we have a
  *  price but do not solve this particular number from it" are three different
  *  things to tell a beginner, and the middle one is the hardest. */
+import { toAnnualReport } from './annualReport.js'
+
 export const NO_PRICE = 'no_market_price'
 export const VERDICT_WITHHELD = 'verdict_withheld'
 export const IMPLIED_GROWTH_UNSOLVED = 'implied_growth_not_solved'
@@ -1084,6 +1086,7 @@ export function toView(envelope) {
     aiStatus: aiFailed ? AI_FALLBACK : AI_OK,
     aiFallbackReason: aiFailed ? (str(analysis?.fallback_reason) ?? 'unknown') : null,
     aiDisagreement: str(analysis?.disagreement?.summary),
+    annualReport: toAnnualReport(analysis?.annual_report, aiFailed),
 
     /* The gate, and the sentences that explain it. Carried whole so a component
        can say why the word is missing in the backend's words rather than its own;

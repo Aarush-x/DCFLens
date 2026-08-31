@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import logging
 from dataclasses import replace
 from urllib.parse import urlparse
 
@@ -27,6 +28,8 @@ from app.ai.models import (
     QualitativeProvider,
     ValuationImpact,
     ValidatedAiResponse,
+    AnnualReportReview,
+    NarrativeFinding,
 )
 from app.ai.prompt import build_provider_request
 from app.ai.schema import (
@@ -44,6 +47,7 @@ from app.valuation.models import DcfAssumptions, DcfResult, DcfValidationError
 MAX_EVIDENCE_ITEMS = 64
 MAX_EVIDENCE_CONTENT_CHARS = 4_000
 _ASSUMPTION_NAMES = tuple(AI_ADJUSTMENT_BOUNDS)
+logger = logging.getLogger(__name__)
 
 
 class AiAnalysisInputError(ValueError):
@@ -51,6 +55,23 @@ class AiAnalysisInputError(ValueError):
 
 
 def run_qualitative_analysis(
+    analysis_input: AiAnalysisInput,
+    provider: QualitativeProvider,
+    *,
+    deterministic: DeterministicAnalysis | None = None,
+) -> AiAnalysisResult:
+    result = _run_qualitative_analysis(analysis_input, provider, deterministic=deterministic)
+    context = analysis_input.narrative_context
+    if context is not None and result.annual_report is None:
+        result = replace(result, annual_report=AnnualReportReview(
+            "AI_UNAVAILABLE" if result.fallback_reason else "UNAVAILABLE",
+            context.coverage, (), context.excerpts,
+            (*context.warnings, "No AI narrative findings were applied."), context.parser_version,
+        ))
+    return result
+
+
+def _run_qualitative_analysis(
     analysis_input: AiAnalysisInput,
     provider: QualitativeProvider,
     *,
@@ -76,6 +97,7 @@ def run_qualitative_analysis(
         baseline_valuation,
         deterministic_checklist,
         analysis_input.evidence,
+        analysis_input.narrative_context,
     )
     # Selection never changes source records. Only actually transmitted IDs can
     # support AI claims, even if an omitted ID exists in the full SEC dataset.
@@ -121,8 +143,12 @@ def run_qualitative_analysis(
         )
 
     try:
+        narrative_evidence = {
+            item.evidence_id: item.topic for item in analysis_input.narrative_context.excerpts
+            if item.evidence_id in evidence_by_id
+        } if analysis_input.narrative_context else {}
         validated = parse_and_validate_ai_response(
-            response_text, frozenset(evidence_by_id)
+            response_text, frozenset(evidence_by_id), narrative_evidence=narrative_evidence,
         )
         return _apply_validated_response(
             analysis_input,
@@ -133,6 +159,7 @@ def run_qualitative_analysis(
             validated,
         )
     except AiResponseValidationError as exc:
+        logger.warning("gemini_output_rejected", extra={"validation_code": exc.code})
         return _fallback_result(
             f"invalid_ai_response:{exc.code}",
             baseline,
@@ -333,6 +360,18 @@ def _apply_validated_response(
         fallback=False,
         evidence_coverage=len(evidence_by_id) / max(1, len(analysis_input.evidence)),
     )
+    context = analysis_input.narrative_context
+    annual_report = None
+    if context is not None:
+        selected = tuple(item.evidence_id for item in context.excerpts if item.evidence_id in evidence_by_id)
+        annual_report = AnnualReportReview(
+            "REVIEWED" if validated.narrative_findings else "NO_FINDINGS" if selected else "UNAVAILABLE",
+            context.coverage,
+            tuple(NarrativeFinding(item.topic, item.summary,
+                  _resolve_evidence(item.evidence_ids, evidence_by_id), item.claim_type)
+                  for item in validated.narrative_findings),
+            context.excerpts, context.warnings, context.parser_version, selected,
+        )
     return AiAnalysisResult(
         status=AiAnalysisStatus.APPLIED,
         fallback_reason=None,
@@ -345,6 +384,7 @@ def _apply_validated_response(
         valuation_impact=impact,
         evidence_assessment=assessments,
         confidence=confidence,
+        annual_report=annual_report,
         checklist_qualitative_findings=findings,
         disagreement=DisagreementSummary(
             summary=summary,

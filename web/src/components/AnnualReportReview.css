@@ -1,0 +1,24 @@
+.annual-review { margin-top: 64px; border-top: 1px solid var(--hair2); padding-top: 28px; font-family: var(--f) }
+.annual-review h2 { font-family: var(--fd); font-size: clamp(26px, 3vw, 36px); font-weight: var(--dw); letter-spacing: var(--dt); word-spacing: var(--dws); line-height: 1.2; color: var(--cream); margin: 12px 0 16px; max-width: 30ch }
+.annual-review p, .annual-review li { font-size: var(--t-body); line-height: 1.65; color: var(--dim); overflow-wrap: anywhere }
+.annual-intro { max-width: 72ch }
+.annual-topics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 40px; margin-top: 28px }
+.annual-topic { min-width: 0; padding: 24px 0; border-top: 1px solid var(--hair) }
+.annual-topic h3 { font-family: var(--fd); font-size: 22px; font-weight: var(--dw); letter-spacing: var(--dt); word-spacing: var(--dws); color: var(--cream); margin: 0 0 12px }
+.annual-review .annual-label { font-family: var(--m); font-size: var(--t-label); letter-spacing: .12em; text-transform: uppercase; color: var(--dim) }
+.annual-review .annual-caveat { font-size: var(--t-small) }
+.annual-review summary { cursor: pointer; color: var(--cream); font-family: var(--m); font-size: var(--t-meta); padding: 12px 0; width: fit-content }
+.annual-review summary:focus-visible, .annual-review a:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px }
+.annual-evidence { padding: 0 0 12px }
+.annual-excerpt { margin-top: 20px; border-top: 1px solid var(--hair); padding-top: 12px }
+.annual-excerpt blockquote { margin: 14px 0; padding-left: 16px; border-left: 2px solid var(--hair2); font-size: var(--t-small); line-height: 1.7; color: var(--cream); overflow-wrap: anywhere }
+.annual-excerpt a { color: var(--cream); font-size: var(--t-small); text-decoration: underline; text-underline-offset: 4px }
+.annual-excerpt dl { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px 12px; margin-top: 18px; font-family: var(--m); font-size: var(--t-meta); line-height: 1.5; color: var(--dim) }
+.annual-excerpt dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums }
+.annual-scope { border-top: 1px solid var(--hair); padding-top: 8px }
+.annual-scope p, .annual-scope ul { max-width: 85ch }
+.annual-scope ul { padding-left: 20px; list-style: disc }
+@media (max-width: 760px) {
+  .annual-topics { grid-template-columns: minmax(0, 1fr); gap: 0 }
+  .annual-review { margin-top: 40px }
+}

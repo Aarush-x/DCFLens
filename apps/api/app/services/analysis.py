@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import date, datetime
 from typing import Any, Protocol
 
@@ -16,7 +16,8 @@ from app.ai.models import (
     QualitativeProvider,
 )
 from app.ai.service import prepare_deterministic_analysis, run_qualitative_analysis
-from app.checklist.models import ChecklistInput, QualitativeChecklistFacts
+from app.checklist.models import ChecklistInput, QualitativeChecklistFacts, FilingEvidenceReference
+from app.data.sec.narrative import NarrativeContext, TopicCoverage, TOPICS, extract_narrative
 from app.core.settings import Settings
 from app.data.sec.filing_cash import needs_filing_cash, supplement_filing_cash
 from app.data.sec import (
@@ -159,6 +160,7 @@ class AnalysisService:
         analysis_cache: CacheBackend[str, AnalysisCore],
         prices: PriceGateway,
         singleflight: SingleFlight[str, AnalysisCore] | None = None,
+        narrative_cache: CacheBackend[str, NarrativeContext] | None = None,
     ) -> None:
         self._sec = sec
         self._provider = provider
@@ -167,6 +169,10 @@ class AnalysisService:
         self._analysis_cache = analysis_cache
         self._prices = prices
         self._singleflight = singleflight or SingleFlight()
+        self._narrative_cache = (
+            narrative_cache if narrative_cache is not None
+            else MemoryCache(max_entries=8, ttl_seconds=900)
+        )
 
     def analyze(self, raw_ticker: str) -> AnalysisEnvelope:
         ticker = normalize_ticker(raw_ticker)
@@ -205,6 +211,26 @@ class AnalysisService:
                 ) from exc
             self._deterministic_cache.set(deterministic_key, deterministic)
 
+        # Fetch/parse narrative only after the provider-independent valuation is
+        # valid. Retrieval failures must never invalidate those financial facts.
+        narrative = self._load_narrative(company.resolution.cik)
+        filing_evidence = tuple(
+            AnalysisEvidence(
+                evidence_id=item.evidence_id, source_type="sec_filing_section",
+                content=item.text, source_url=item.source_url, is_untrusted_text=True,
+                reference=FilingEvidenceReference(
+                    item.evidence_id, "SEC EDGAR", item.cik, item.accession_number,
+                    item.filing_form, item.filing_date, item.source_url, item.locator,
+                    f"{item.topic}; {item.parser_version}; document SHA256 {item.document_sha256}",
+                    item.retrieved_at,
+                ),
+            ) for item in narrative.excerpts
+        )
+        if narrative.status != "NOT_REQUESTED":
+            analysis_input = replace(
+                analysis_input, narrative_context=narrative,
+                evidence=(*analysis_input.evidence[:64 - len(filing_evidence)], *filing_evidence),
+            )
         result = run_qualitative_analysis(
             analysis_input,
             self._provider,
@@ -225,14 +251,42 @@ class AnalysisService:
             ),
             analysis=result,
         )
-        if result.status is AiAnalysisStatus.APPLIED:
+        if result.status is AiAnalysisStatus.APPLIED and narrative.status != "UNAVAILABLE":
             self._analysis_cache.set(ticker, core)
-        else:
+        elif result.status is not AiAnalysisStatus.APPLIED:
             logger.info(
                 "analysis_completed_with_deterministic_fallback",
                 extra={"ticker": ticker, "fallback_reason": result.fallback_reason},
             )
         return core
+
+    def _load_narrative(self, cik: str) -> NarrativeContext:
+        if isinstance(self._provider, _UnavailableGeminiProvider):
+            return NarrativeContext("NOT_REQUESTED", warnings=("Gemini is not configured; narrative retrieval skipped.",))
+        cached = self._narrative_cache.get(cik)
+        if cached is not None:
+            return cached
+        fetch = getattr(self._sec, "get_latest_10k_for_cik", None)
+        if fetch is None:
+            return NarrativeContext("NOT_REQUESTED", warnings=("SEC gateway has no filing retrieval capability.",))
+        try:
+            document = fetch(cik)
+            context = extract_narrative(document)
+            if document.metadata.is_amendment:
+                context = replace(context, warnings=(*context.warnings,
+                    "Latest filing is an amendment; only its text was reviewed. Omitted original sections were not inferred."))
+            logger.info("annual_report_extracted", extra={"status": context.status,
+                        "excerpt_count": len(context.excerpts), "parser_version": context.parser_version})
+            if context.status == "EXTRACTED":
+                self._narrative_cache.set(cik, context)
+            return context
+        except Exception as exc:
+            # No response bodies, filing text or exception strings in logs.
+            logger.warning("annual_report_unavailable", extra={"error_type": type(exc).__name__})
+            return NarrativeContext("UNAVAILABLE", coverage=tuple(
+                TopicCoverage(topic, "UNAVAILABLE", "Annual-report retrieval or parsing failed; no adverse inference.")
+                for topic in TOPICS
+            ), warnings=("Annual-report text could not be reviewed; structured financial analysis remains available.",))
 
     def _load_company(self, ticker: str) -> CompanyData:
         cached = self._normalized_cache.get(ticker)
@@ -474,6 +528,7 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
         normalized_cache=MemoryCache(**cache_args),
         deterministic_cache=MemoryCache(**cache_args),
         analysis_cache=MemoryCache(**cache_args),
+        narrative_cache=MemoryCache(**cache_args),
         prices=MarketPriceService(
             provider=quote_provider,
             # Two caches because a successful quote and a failed one deserve very

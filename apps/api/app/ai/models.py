@@ -17,6 +17,7 @@ from app.valuation.models import (
     DcfResult,
     SensitivityConfig,
 )
+from app.data.sec.narrative import NarrativeContext, NarrativeExcerpt, TopicCoverage
 
 
 class AiAnalysisStatus(StrEnum):
@@ -60,6 +61,7 @@ class AiAnalysisInput:
     sensitivity: SensitivityConfig
     checklist_input: ChecklistInput
     evidence: tuple[AnalysisEvidence, ...]
+    narrative_context: NarrativeContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,12 +112,40 @@ class RequestedChecklistFinding:
 
 
 @dataclass(frozen=True, slots=True)
+class RequestedNarrativeFinding:
+    topic: str
+    summary: str
+    evidence_ids: tuple[str, ...]
+    claim_type: ClaimType
+
+
+@dataclass(frozen=True, slots=True)
 class ValidatedAiResponse:
     adjustments: tuple[RequestedAdjustment, ...]
     evidence_assessment: tuple[RequestedEvidenceAssessment, ...]
     checklist_findings: tuple[RequestedChecklistFinding, ...]
     disagreement_summary: str
     disagreement_evidence_ids: tuple[str, ...]
+    narrative_findings: tuple[RequestedNarrativeFinding, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class NarrativeFinding:
+    topic: str
+    summary: str
+    evidence_references: tuple[ChecklistEvidence, ...]
+    claim_type: ClaimType
+
+
+@dataclass(frozen=True, slots=True)
+class AnnualReportReview:
+    status: str
+    coverage: tuple[TopicCoverage, ...]
+    findings: tuple[NarrativeFinding, ...]
+    excerpts: tuple[NarrativeExcerpt, ...]
+    warnings: tuple[str, ...]
+    parser_version: str
+    selected_evidence_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +235,7 @@ class AiAnalysisResult:
     confidence: ConfidenceAssessment
     checklist_qualitative_findings: tuple[ChecklistQualitativeFinding, ...]
     disagreement: DisagreementSummary
+    annual_report: AnnualReportReview | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

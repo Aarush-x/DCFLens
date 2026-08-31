@@ -67,6 +67,12 @@ An invalid response is not partially trusted. The result uses `DETERMINISTIC_FAL
 
 ### Compact qualitative review (`compact-v1`)
 
+Facts-only requests retain this policy. Requests with extracted 10-K paragraphs
+use `compact-narrative-v1`: one excerpt per topic is prioritized before numeric
+facts within the same evidence budget, and up to four separately cited report
+findings are added to the same response. The 4,096-token limit and three rate
+adjustment bounds are unchanged. See [annual-report analysis](annual-report-analysis.md).
+
 Gemini performs a short second opinion, not another DCF calculation or full
 checklist evaluation. Python still computes the baseline, valuation, sensitivity,
 and all ten original checklist items before any provider call.
