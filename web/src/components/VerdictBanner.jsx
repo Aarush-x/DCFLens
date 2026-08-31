@@ -185,7 +185,7 @@ export function tensionFor(quality, label) {
 /* .avsub from design/index.html, kept here rather than in index.css so this
    component owns its own type. Values copied, not chosen. */
 const SUB = {
-  fontSize: 17,
+  fontSize: 'var(--t-lead)',
   color: 'var(--dim)',
   maxWidth: '54ch',
   lineHeight: 1.55,
@@ -199,6 +199,11 @@ const SUB = {
 const COMBO_TYPE = {
   fontSize: 'clamp(30px, 4.6vw, 60px)',
   letterSpacing: '-.04em',
+  /* Clash's space glyph is .154em against Satoshi's .250em, so a display line
+     sets its words half as far apart as the paragraph under it — see --dws in
+     tokens.css. .verdict carries this in CSS; this object overrides fontSize and
+     letterSpacing on the same element, so it has to carry it too. */
+  wordSpacing: 'var(--dws)',
   lineHeight: 1.05,
   maxWidth: '20ch',
 }
@@ -230,19 +235,25 @@ const AXES = {
   margin: '0 0 36px',
 }
 
-/* .card h3 from design/index.html — the display face at its small step. */
+/* .card h3 from design/index.html — the display face at its small step.
+
+   This is the same treatment .plain-english .pe h3 sets in CSS, and until
+   2026-08-31 the two had drifted to 22px and 18px. They are one step now: an
+   axis word and a claim title are the same kind of heading. wordSpacing is not
+   optional on a var(--fd) rule — see --dws in tokens.css. */
 const AXIS_VALUE = {
   fontFamily: 'var(--fd)',
-  fontSize: 22,
-  fontWeight: 600,
+  fontSize: 19,
+  fontWeight: 'var(--dw)',
   letterSpacing: '-.022em',
-  lineHeight: 1.2,
-  margin: '9px 0 0',
+  wordSpacing: 'var(--dws)',
+  lineHeight: 1.25,
+  margin: '10px 0 0',
 }
 
 const AXIS_CLAUSE = {
   margin: '8px 0 0',
-  fontSize: 14,
+  fontSize: 'var(--t-small)',
   lineHeight: 1.6,
   color: 'var(--dim)',
   maxWidth: '36ch',
@@ -264,7 +275,7 @@ const CAVEATS = {
 
 const CAVEAT = {
   margin: '0 0 8px',
-  fontSize: 14.5,
+  fontSize: 'var(--t-body)',
   lineHeight: 1.6,
   color: 'var(--dim)',
 }
@@ -470,7 +481,12 @@ export default function VerdictBanner({ data }) {
         {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
         {/* The refusal state says everything already; a confidence reading on top
             of "we can't value this" is noise. */}
-        {!cannotValue && <ConfidenceChip confidence={confidence} />}
+        {/* aiStatus rides along so the chip's panel can say WHY a Low reading sits
+            below its own average — the backend holds a fallback analysis at Low
+            whatever the factors averaged to. */}
+        {!cannotValue && (
+          <ConfidenceChip confidence={confidence} aiStatus={data.aiStatus ?? null} />
+        )}
       </div>
       {rangeHeadline && (
         <Label style={{ marginTop: 18 }}>Estimated value per share</Label>

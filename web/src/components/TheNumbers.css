@@ -14,7 +14,8 @@
  WhyDrawer.css, and nothing here collides with a name index.css defines. */
 .cap {
   font-family: var(--m);
-  font-size: 10.5px;
+  font-size: var(--t-label);
+  font-weight: 500;
   letter-spacing: .16em;
   text-transform: uppercase;
   color: var(--faint);
@@ -31,7 +32,7 @@
   margin: 10px 0 4px;
 }
 
-.delta { font-family: var(--m); font-size: 13px }
+.delta { font-family: var(--m); font-size: var(--t-meta) }
 
 /* The range is the headline, so it must never wrap into a second line and change
    the card's height — mono at 38px puts "$1,234 – $5,678" inside the 358px the
@@ -43,7 +44,7 @@
    a hint is a hint on both sides of the page. */
 .scnhint {
   margin: 9px 0 2px;
-  font-size: 13px;
+  font-size: var(--t-small);
   color: var(--dim);
 }
 
@@ -51,8 +52,8 @@
 .scn {
   display: flex;
   justify-content: space-between;
-  padding: 11px 0;
-  font-size: 13.5px;
+  padding: 12px 0;
+  font-size: var(--t-body);
   border-bottom: 1px solid var(--hair);
 }
 .scn:last-child { border: none }
@@ -60,12 +61,12 @@
 .scn .v { font-family: var(--m); font-weight: 600 }
 
 /* "What has to be true" rows */
-.bel { display: flex; justify-content: space-between; padding: 9px 0; font-size: 13.5px }
+.bel { display: flex; justify-content: space-between; padding: 10px 0; font-size: var(--t-body) }
 .bel .k { color: var(--dim) }
 .bel .v { font-family: var(--m); font-weight: 600 }
 .belnote {
-  font-size: 13px;
-  color: var(--faint);
+  font-size: var(--t-small);
+  color: var(--dim);
   line-height: 1.6;
   margin: 14px 0 0;
   padding-top: 14px;
@@ -75,8 +76,8 @@
 /* One quiet line where a figure would have been. Same weight as .belnote, but it
    sits under a value rather than after a list. Used for the price gap. */
 .numnote {
-  font-size: 13px;
-  color: var(--faint);
+  font-size: var(--t-small);
+  color: var(--dim);
   line-height: 1.55;
   margin: 6px 0 0;
   max-width: 30ch;

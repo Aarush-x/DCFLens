@@ -1,0 +1,179 @@
+/* ── The confidence chip and its "how we got this" panel ──────────────────────
+
+   Two rules shape everything here.
+
+   1. THE COLOUR IS THE LOCKED TRAFFIC LIGHT, NOT A NEW ONE. --under / --fair /
+      --over already carry green / amber / red across this app. Confidence reuses
+      them rather than inventing a fourth scale, so a reader who has learned the
+      range bar's colours has already learned this chip's.
+
+   2. RED IS NOT AN ERROR HERE. Low confidence is an honest reading, so the panel
+      opens by saying what low means — read the range as wide, not as wrong — and
+      the chip fill stays --surface. The colour marks the reading; it does not
+      shout about it. Fill, not just ink, would turn a caveat into an alarm. */
+
+.conf { position: relative; display: inline-flex }
+
+.conf__chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 5px 12px;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  font-family: var(--m);
+  font-size: var(--t-label, 11.5px);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .16s;
+}
+.conf__chip:hover,
+.conf__chip:focus-visible,
+.conf[data-open="true"] .conf__chip { border-color: var(--hair2) }
+
+.conf__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--level);
+  flex: none;
+}
+.conf__label { color: var(--faint) }
+.conf__value { color: var(--level) }
+
+/* The hover affordance. It occupies no width until it is wanted — a permanent
+   "how?" beside every chip is furniture, and the chip has to read as a reading
+   first and a control second. */
+.conf__more {
+  color: var(--faint);
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: opacity .16s, max-width .16s;
+}
+.conf__chip:hover .conf__more,
+.conf__chip:focus-visible .conf__more,
+.conf[data-open="true"] .conf__more { opacity: 1; max-width: 5em }
+
+/* ── the panel ──────────────────────────────────────────────────────────────
+   Anchored under the chip, left-aligned with it. The ::before is a transparent
+   bridge across the 8px gap so the pointer can travel from chip to panel
+   without crossing dead space and dismissing the thing it is reaching for. */
+.conf__panel {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(23.5rem, calc(100vw - 3rem));
+  padding: 16px 18px 15px;
+  background: var(--surface);
+  border: 1px solid var(--hair2);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px -30px rgba(0,0,0,.9);
+  font-family: var(--f);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  animation: conf-in .16s ease-out both;
+}
+.conf__panel::before {
+  content: "";
+  position: absolute;
+  inset: -9px 0 100% 0;
+}
+@keyframes conf-in { from { opacity: 0; transform: translateY(-4px) } }
+@media (prefers-reduced-motion: reduce) {
+  .conf__panel { animation: none }
+  .conf__more { transition: none }
+}
+
+.conf__head {
+  font-family: var(--m);
+  font-size: var(--t-label, 11.5px);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--level);
+}
+.conf__gloss {
+  margin: 8px 0 0;
+  font-size: var(--t-small, 14px);
+  line-height: 1.5;
+  color: var(--cream);
+}
+.conf__note {
+  margin: 10px 0 0;
+  font-size: var(--t-small, 14px);
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+/* The disclosure. Same quiet-but-clickable language as .viewev — this app has one
+   vocabulary for "there is more behind this", and it is not worth a second. */
+.conf__reveal {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hair2);
+  border-radius: 0;
+  margin: 12px 0 0;
+  padding: 0 0 1px;
+  font: inherit;
+  font-size: var(--t-small, 14px);
+  color: var(--dim);
+  cursor: pointer;
+  transition: color .16s, border-color .16s;
+}
+.conf__reveal:hover,
+.conf__reveal:focus-visible { color: var(--cream); border-color: var(--faint) }
+
+.conf__work { margin-top: 14px; border-top: 1px solid var(--hair); padding-top: 12px }
+.conf__lede { margin: 0 0 10px; font-size: var(--t-small, 14px); line-height: 1.5; color: var(--dim) }
+
+.conf__factor { margin-top: 9px }
+.conf__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--t-small, 14px);
+  color: var(--cream);
+}
+.conf__score {
+  font-family: var(--m);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-meta, 13px);
+  color: var(--level);
+  flex: none;
+}
+.conf__track {
+  margin-top: 5px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--trackbg);
+  overflow: hidden;
+}
+.conf__fill { height: 100%; border-radius: 999px; background: var(--level) }
+
+.conf__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 11px;
+  border-top: 1px solid var(--hair);
+  font-size: var(--t-small, 14px);
+  color: var(--cream);
+}
+.conf__bands { margin: 6px 0 0; font-size: var(--t-small, 14px); line-height: 1.5; color: var(--dim) }
+
+/* The var() fallbacks above are not decoration. The --t-* scale landed in a
+   parallel change that is not committed yet, and this panel deploys before it;
+   without a fallback every size in here would collapse to inherited text the
+   moment it shipped. They stay after that scale lands — the second value is the
+   scale's own, so the two can never disagree. */

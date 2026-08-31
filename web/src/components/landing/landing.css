@@ -10,7 +10,7 @@
 
 #site .scrollcue {
   position: absolute; bottom: 34px; left: 50%; transform: translateX(-50%);
-  font-family: var(--m); font-size: 10px; letter-spacing: .2em; color: var(--faint);
+  font-family: var(--m); font-size: var(--t-label); font-weight: 500; letter-spacing: .18em; color: var(--faint);
 }
 
 /* ── pinned word-by-word statement ── */
@@ -18,7 +18,7 @@
 #site .pin-inner { position: sticky; top: 0; height: 100vh; display: flex; align-items: center }
 #site .statement {
   font-family: var(--fd); font-size: clamp(30px, 5.4vw, 74px); font-weight: 600;
-  line-height: 1.12; letter-spacing: -.035em; max-width: 19ch;
+  line-height: 1.12; letter-spacing: -.035em; word-spacing: var(--dws); max-width: 19ch;
 }
 #site .statement .w { display: inline-block; opacity: .13 }
 
@@ -27,18 +27,18 @@
 #site .bar-inner { position: sticky; top: 0; height: 100vh; display: flex; align-items: center }
 #site .vstate {
   font-family: var(--fd); font-size: clamp(40px, 7.6vw, 104px); font-weight: 800;
-  letter-spacing: -.045em; line-height: 1; margin: 26px 0 8px;
+  letter-spacing: -.045em; word-spacing: var(--dws); line-height: 1; margin: 26px 0 8px;
   transition: color .45s ease;
 }
-#site .vsub { font-size: 16px; color: var(--dim); margin: 0 0 62px; min-height: 24px }
+#site .vsub { font-size: var(--t-lead); color: var(--dim); margin: 0 0 62px; min-height: 24px }
 
 /* ── generic section furniture ── */
 #site .sect { padding: 170px 0 }
 #site h2 {
   font-family: var(--fd); font-size: clamp(30px, 4.6vw, 60px); font-weight: 700;
-  letter-spacing: -.04em; line-height: 1.05; margin: 0 0 16px; max-width: 17ch;
+  letter-spacing: -.04em; word-spacing: var(--dws); line-height: 1.05; margin: 0 0 16px; max-width: 17ch;
 }
-#site .sub { font-size: 17px; color: var(--dim); max-width: 44ch; margin: 0 0 68px; line-height: 1.6 }
+#site .sub { font-size: var(--t-lead); color: var(--dim); max-width: 44ch; margin: 0 0 68px; line-height: 1.6 }
 
 /* ── the three explanation cards ── */
 #site .cards {
@@ -47,17 +47,17 @@
 }
 @media (max-width: 860px) { #site .cards { grid-template-columns: 1fr } }
 #site .card .n {
-  font-family: var(--m); font-size: 11px; color: var(--faint);
+  font-family: var(--m); font-size: var(--t-label); font-weight: 500; color: var(--faint);
   letter-spacing: .16em; margin-bottom: 26px;
 }
 #site .card h3 {
   font-family: var(--fd); font-size: 21px; font-weight: 600;
-  letter-spacing: -.022em; margin: 0 0 12px; line-height: 1.25;
+  letter-spacing: -.022em; word-spacing: var(--dws); margin: 0 0 12px; line-height: 1.25;
 }
-#site .card p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--dim) }
+#site .card p { margin: 0; font-size: var(--t-body); line-height: 1.65; color: var(--dim) }
 #site .chip2 {
   display: inline-block; margin-top: 22px; font-family: var(--m);
-  font-size: 11px; padding: 4px 10px; border-radius: 999px;
+  font-size: var(--t-label); padding: 5px 11px; border-radius: 999px;
 }
 #site .chip2.g { background: color-mix(in srgb, var(--under) 14%, transparent); color: var(--under) }
 #site .chip2.a { background: color-mix(in srgb, var(--fair) 14%, transparent); color: var(--fair) }
@@ -71,7 +71,7 @@
 }
 #site .bignum .unit { font-size: .32em; color: var(--faint) }
 #site .bl {
-  font-family: var(--m); font-size: 11px; letter-spacing: .18em;
+  font-family: var(--m); font-size: var(--t-label); font-weight: 500; letter-spacing: .18em;
   text-transform: uppercase; color: var(--faint); margin-bottom: 12px;
 }
 #site .vs { height: 1px; background: var(--hair); margin: 38px 0 }
@@ -79,16 +79,16 @@
 /* ── closing CTA ── */
 #site .fcta { padding: 190px 0; text-align: center; border-top: 1px solid var(--hair) }
 #site .fcta h2 { margin: 0 auto 34px; max-width: 15ch }
-#site .fcta .pill.solid { font-size: 15px; padding: 14px 30px }
+#site .fcta .pill.solid { font-size: var(--t-lead); padding: 15px 32px }
 #site .fine {
-  font-family: var(--m); font-size: 11px; color: var(--faint);
+  font-family: var(--m); font-size: var(--t-meta); color: var(--faint);
   margin-top: 70px; letter-spacing: .05em;
 }
 
 /* ── range bar primitives (landing copy — see the scoping note above) ── */
 #site .axis {
   display: flex; justify-content: space-between; font-family: var(--m);
-  font-size: 11px; color: var(--faint); margin-bottom: 13px;
+  font-size: var(--t-meta); color: var(--faint); margin-bottom: 13px;
 }
 #site .track { position: relative; height: 3px; background: var(--trackbg) }
 #site .band { position: absolute; top: -1px; height: 5px; background: var(--bandbg) }
@@ -101,16 +101,77 @@
 }
 #site .knoblab {
   position: absolute; top: 25px; transform: translateX(-50%); text-align: center;
-  font-family: var(--m); font-size: 13px; font-weight: 600; white-space: nowrap;
+  font-family: var(--m); font-size: var(--t-body); font-weight: 600; white-space: nowrap;
 }
 #site .knoblab small {
-  display: block; font-size: 9.5px; color: var(--faint); font-weight: 400;
-  letter-spacing: .16em; margin-top: 3px;
+  display: block; font-size: var(--t-label); color: var(--faint); font-weight: 500;
+  letter-spacing: .16em; margin-top: 4px;
 }
 #site .zones {
-  display: flex; justify-content: space-between; margin-top: 62px;
-  font-family: var(--m); font-size: 10px; letter-spacing: .16em;
+  display: flex; justify-content: space-between; margin-top: 74px;
+  font-family: var(--m); font-size: var(--t-label); font-weight: 500; letter-spacing: .16em;
   text-transform: uppercase; color: var(--faint);
+}
+
+/* ── FAQ ────────────────────────────────────────────────────────────────────
+   Hairline rows, no boxes. The cards section already owns the 1px-grid tile
+   look, and repeating it two sections later would read as furniture rather
+   than as a different kind of content.
+
+   Native <details>, so there is no height animation to write and none to
+   suppress under reduced motion — the row simply opens. The .rv reveal on each
+   row is the section's only motion and Landing.jsx already drives it.
+
+   Body copy is --dim, never --faint: --faint fails AA against --ink (DESIGN.md
+   §3, known issue) and is confined here to the mono index number, which carries
+   no information a reader needs. */
+#site .faq .sub { max-width: 52ch }
+#site .qas { border-top: 1px solid var(--hair) }
+
+#site .qa { border-bottom: 1px solid var(--hair) }
+#site .qa summary {
+  display: grid; grid-template-columns: 44px 1fr 24px; align-items: baseline;
+  gap: 4px; padding: 26px 4px; cursor: pointer; list-style: none;
+  transition: background .18s ease;
+}
+#site .qa summary::-webkit-details-marker { display: none }
+#site .qa summary:hover { background: var(--hoverbg) }
+#site .qa summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+
+#site .qa .qn {
+  font-family: var(--m); font-size: var(--t-label); color: var(--faint);
+  letter-spacing: .1em; transition: color .18s ease;
+}
+#site .qa .qt {
+  font-family: var(--fd); font-size: clamp(18px, 2.1vw, 22px); font-weight: 600;
+  letter-spacing: var(--dt); word-spacing: var(--dws); color: var(--cream); line-height: 1.35;
+}
+#site .qa[open] .qn { color: var(--accent) }
+
+/* Caret drawn from two borders rather than a glyph, so it stays crisp at any
+   size and rotates about its own centre. */
+#site .qa .qc {
+  justify-self: end; align-self: center; width: 8px; height: 8px;
+  border-right: 1.5px solid var(--dim); border-bottom: 1.5px solid var(--dim);
+  transform: rotate(45deg) translate(-2px, -2px); transform-origin: center;
+  transition: transform .22s ease, border-color .18s ease;
+}
+#site .qa[open] .qc {
+  transform: rotate(225deg) translate(-2px, -2px); border-color: var(--accent);
+}
+
+/* Indented to the question text, not the number, so the answer reads as
+   hanging off its question rather than starting a new column. */
+#site .qbody { padding: 0 4px 30px; margin-left: 44px }
+#site .qbody p {
+  margin: 0 0 15px; max-width: 64ch;
+  font-size: var(--t-body); line-height: 1.7; color: var(--dim);
+}
+#site .qbody p:last-child { margin-bottom: 0 }
+
+@media (max-width: 620px) {
+  #site .qa summary { grid-template-columns: 30px 1fr 20px; padding: 22px 2px }
+  #site .qbody { margin-left: 30px }
 }
 
 /* ── reduced motion ─────────────────────────────────────────────────────────

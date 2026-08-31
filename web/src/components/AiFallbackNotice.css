@@ -32,15 +32,16 @@
 .ai-fallback .ai-fallback__head {
   margin: 0 0 12px;
   font-family: var(--fd);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: var(--dw);
   letter-spacing: -.022em;
+  word-spacing: var(--dws);
   color: var(--cream);
 }
 
 .ai-fallback .ai-fallback__body {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: var(--t-body);
   line-height: 1.65;
   color: var(--dim);
   max-width: 54ch;
@@ -54,7 +55,7 @@
   margin: 14px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--hair);
-  font-size: 13px;
+  font-size: var(--t-small);
   line-height: 1.6;
   color: var(--dim);
   max-width: 54ch;

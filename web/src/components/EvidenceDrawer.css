@@ -38,19 +38,20 @@
 }
 .evpanel .evhead h2 {
   font-family: var(--fd); font-size: 21px; font-weight: 600; letter-spacing: -.024em;
+  word-spacing: var(--dws);
   line-height: 1.25; margin: 9px 0 0; max-width: 26ch; color: var(--cream);
 }
 /* .cap, verbatim from design/index.html — the drawer reuses it for every section
    label so the panel is read in the same voice as the right-hand column. */
 .evpanel .cap {
-  font-family: var(--m); font-size: 10.5px; letter-spacing: .16em;
+  font-family: var(--m); font-size: var(--t-label); font-weight: 500; letter-spacing: .16em;
   text-transform: uppercase; color: var(--faint);
 }
 .evpanel .evclose {
   flex: none; appearance: none; background: none; cursor: pointer;
   border: 1px solid var(--hair); border-radius: 999px;
   width: 32px; height: 32px; line-height: 1;
-  color: var(--dim); font-size: 12px; transition: .2s;
+  color: var(--dim); font-size: var(--t-small); transition: .2s;
 }
 .evpanel .evclose:hover,
 .evpanel .evclose:focus-visible { border-color: var(--hair2); color: var(--cream) }
@@ -62,9 +63,9 @@
   padding: 20px 0 0;
 }
 .evpanel .evform {
-  font-family: var(--m); font-size: 13px; font-weight: 600; color: var(--cream);
+  font-family: var(--m); font-size: var(--t-body); font-weight: 600; color: var(--cream);
 }
-.evpanel .evfiled { font-family: var(--m); font-size: 12px; color: var(--faint) }
+.evpanel .evfiled { font-family: var(--m); font-size: var(--t-meta); color: var(--faint) }
 
 /* ── provenance ──
    A pill, not a banner. Neither state is an error, and a full-width coloured strip
@@ -75,14 +76,14 @@
   margin-right: 9px; vertical-align: middle;
 }
 .evpanel .evprovlabel {
-  font-family: var(--m); font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  font-family: var(--m); font-size: var(--t-label); font-weight: 500; letter-spacing: .12em; text-transform: uppercase;
   color: var(--cream);
 }
 /* Parsed-from-text reads one step quieter than XBRL — lower confidence, stated by
    the weight of the type rather than by a warning. */
 .evpanel .evprov[data-provenance="text"] .evprovlabel { color: var(--dim) }
 .evpanel .evprov em {
-  display: block; font-style: normal; font-size: 13px; line-height: 1.55;
+  display: block; font-style: normal; font-size: var(--t-small); line-height: 1.55;
   color: var(--faint); margin-top: 6px; max-width: 46ch;
 }
 
@@ -91,8 +92,8 @@
 .evpanel .evsect { margin-top: 30px }
 .evpanel .evsect > .cap { display: block; margin-bottom: 12px }
 
-/* .mathrow's geometry, with the concept and transformation stacked beneath. */
-.evpanel .evrow { padding: 13px 0; border-bottom: 1px solid var(--hair); font-size: 14px }
+/* .mathrow's geometry, with the plain-English gloss stacked beneath. */
+.evpanel .evrow { padding: 14px 0; border-bottom: 1px solid var(--hair); font-size: var(--t-body) }
 .evpanel .evrowtop { display: flex; justify-content: space-between; gap: 20px; align-items: baseline }
 .evpanel .evrowtop .k { color: var(--cream); font-weight: 500 }
 /* Non-negotiable #6 — mono and tabular, so nothing jitters while the panel tweens. */
@@ -102,25 +103,17 @@
 }
 .evpanel .evrowtop .v.missing { color: var(--faint) }
 
-/* The XBRL concept. Long, hyphen-free and unbreakable by default — it must wrap
-   rather than push the panel sideways. */
-.evpanel .evconcept {
-  font-family: var(--m); font-size: 11px; line-height: 1.5; color: var(--faint);
-  margin-top: 6px; word-break: break-word;
-}
-.evpanel .evtransform { margin-top: 6px }
-.evpanel .evtransform code {
-  font-family: var(--m); font-size: 11px; color: var(--dim);
-  border: 1px solid var(--hair); border-radius: 4px; padding: 1px 6px;
-}
-.evpanel .evtransform em {
-  display: block; font-style: normal; font-size: 13px; line-height: 1.5;
-  color: var(--faint); margin-top: 6px; max-width: 46ch;
+/* What we did to the figure, in English. The mono tag and the boxed expression that
+   used to sit here are gone — see EvidenceDrawer.jsx — so this is prose, and it is
+   set as prose: the body face, one step quieter than the row above it. */
+.evpanel .evgloss {
+  margin: 6px 0 0; font-size: var(--t-small); line-height: 1.55; color: var(--dim);
+  max-width: 46ch;
 }
 
 .evpanel .evcalc,
 .evpanel .evsection {
-  margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--dim); max-width: 48ch;
+  margin: 0; font-size: var(--t-body); line-height: 1.6; color: var(--dim); max-width: 48ch;
 }
 
 /* ── links ── */
@@ -128,7 +121,7 @@
 .evpanel .evlinks {
   margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--hair);
   display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
-  font-size: 13px;
+  font-size: var(--t-body);
 }
 /* `.cite a`, again — the drawer's outbound link and a claim's citation go to the
    same place and look the same doing it. */
@@ -139,5 +132,5 @@
 }
 .evpanel .evlinks a:hover,
 .evpanel .evlinks a:focus-visible { border-color: var(--faint) }
-.evpanel .evlinks a.secondary { color: var(--dim); font-size: 12.5px }
+.evpanel .evlinks a.secondary { color: var(--dim); font-size: var(--t-small) }
 .evpanel .evnolink { color: var(--dim); font-style: italic }

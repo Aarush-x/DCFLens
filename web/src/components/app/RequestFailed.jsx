@@ -36,14 +36,14 @@ export default function RequestFailed({ error, ticker }) {
     >
       <Eyebrow>{ticker ? `${ticker} · nothing to show` : 'Nothing to show'}</Eyebrow>
       <h1 className="verdict" style={{ color: 'var(--faint)' }}>{headline}</h1>
-      <p style={{ fontSize: 17, color: 'var(--dim)', maxWidth: '54ch', lineHeight: 1.55, marginBottom: 34 }}>
+      <p style={{ fontSize: 'var(--t-lead)', color: 'var(--dim)', maxWidth: '54ch', lineHeight: 1.55, marginBottom: 34 }}>
         {body}
       </p>
 
       {detail && (
         <Card variant="box">
           <Label>What the service said</Label>
-          <p style={{ color: 'var(--dim)', margin: '10px 0 0', fontSize: 14.5, lineHeight: 1.6 }}>
+          <p style={{ color: 'var(--dim)', margin: '10px 0 0', fontSize: 'var(--t-body)', lineHeight: 1.6 }}>
             {detail}
           </p>
         </Card>

@@ -243,11 +243,24 @@ function Analysis({ data }) {
                 renders: Gemini fails every live call. */}
             <AiFallbackNotice data={data} />
             <PlainEnglish items={data.plain_english} data={data} />
-            {/* The second layer. The ONLY place jargon is allowed, and only glossed. */}
-            <WhyDrawer math={data.the_math} checks={data.checks} price={data.price?.current ?? null} />
           </div>
           <TheNumbers data={data} />
         </div>
+
+        {/* The second layer. The ONLY place jargon is allowed, and only glossed.
+
+            It sits BELOW the two panes and spans both, rather than inside the
+            left one. Two reasons, and the second is why it moved on 2026-08-31:
+
+            1. It is not part of the narrative column — it is the whole page's
+               working, and it opens with a 460px sensitivity grid that was
+               scrolling sideways inside a 640px pane while half the screen sat
+               empty beside it.
+            2. Collapsed, it was the last thing in a 1500px column next to a
+               500px one, so the trigger sat alone with a void to its right. The
+               reported "empty space when collapsed" was that void. Full width,
+               the trigger closes the argument instead of trailing off it. */}
+        <WhyDrawer math={data.the_math} checks={data.checks} price={data.price?.current ?? null} />
 
         {/* The proof of work, under the argument it backs: the exact document every
             figure came from, by accession number, with a link to it. It sits above
