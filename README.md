@@ -1,115 +1,223 @@
 # DCFLens
 
-DCFLens is an evidence-first equity research and discounted cash flow application. The repository contains a production-oriented monorepo scaffold, deterministic DCF engine, adaptive baseline policy, SEC ingestion and normalization, immutable checklist engine, and an evidence-bound Gemini qualitative-analysis domain service. Filing-section extraction, API-route integration, and the product frontend workflow are not implemented yet.
+**One ticker. One valuation. Every assumption explained and every conclusion traced to evidence.**
 
-The design uses a monorepo with a Next.js frontend in `apps/web`, a Dockerized FastAPI backend in `apps/api`, an optional `packages/shared` package for generated or cross-runtime contracts, and repository-level deployment configuration.
+DCFLens turns SEC filings into an inspectable stock valuation. Enter a supported US company ticker to explore its financial facts, a two-stage discounted cash flow estimate, the original DeltaDCF ten-point checklist, and evidence-backed qualitative analysis from Gemini.
 
-## Documentation
+The calculations run in Python, independently of AI. Gemini can suggest bounded changes to growth and discount-rate assumptions, but it cannot rewrite historical facts or valuation formulas. If AI is unavailable, DCFLens preserves the deterministic valuation and explains the fallback.
 
-| Document | Purpose |
-| --- | --- |
-| [Product requirements](docs/product-requirements.md) | Users, outcomes, scope, non-goals, and acceptance criteria |
-| [Technical architecture](docs/technical-architecture.md) | Components, boundaries, proposed repository layout, and design decisions |
-| [Data flow](docs/data-flow.md) | Request, ingestion, normalization, valuation, AI, and response flow |
-| [Deployment architecture](docs/deployment-architecture.md) | Vercel, Render, Docker, configuration, health checks, and rollback model |
-| [Valuation methodology](docs/valuation-methodology.md) | Deterministic DCF formulas, assumptions, scenarios, and validation rules |
-| [DCF engine contract](docs/dcf-engine.md) | Implemented formulas, units, validation, decomposition, and assumption sensitivity |
-| [Adaptive baseline](docs/adaptive-baseline.md) | Versioned sector priors, company-specific assumption formulas, fallbacks, and traces |
-| [Checklist engine](docs/checklist-engine.md) | Immutable ten-item contract, deterministic rules, sector context, and evidence behavior |
-| [SEC ingestion contract](docs/sec-ingestion.md) | EDGAR access, pacing, retries, caching, normalization, and fact-level provenance |
-| [AI trust boundaries](docs/ai-trust-boundaries.md) | What Gemini may do, what it may not do, and required safeguards |
-| [Gemini trust model](docs/trust-model.md) | Implemented structured-output, evidence, adjustment, fallback, and confidence contract |
-| [FastAPI service layer](docs/api-service.md) | Analyze endpoint, errors, CORS, caching, concurrency, logging, and runtime behavior |
-| [Frontend/backend integration](docs/frontend-backend-integration.md) | API URL resolution, cold-start recovery, cancellation, UI states, and deployment configuration |
-| [Evidence provenance](docs/evidence-provenance.md) | Source identity, locators, transformation records, and claim citation rules |
-| [DeltaDCF 10-point checklist](docs/deltadcf-checklist.md) | The reference checklist preserved unchanged |
-| [DeltaDCF comparison](docs/deltadcf-comparison.md) | Reusable patterns, coupled details, and DCFLens redesigns |
-| [Deployment mapping](docs/deployment-mapping.md) | File-by-file DeltaDCF to DCFLens classification |
-| [Production deployment runbook](docs/production-deployment.md) | Verified parity, configuration checks, exact dashboard order, smoke test, and rollback |
+[Open DCFLens](https://dcflens.vercel.app) · [GitHub repository](https://github.com/Aarush-x/DCFLens)
 
-## Reference baseline
+## What you can explore
 
-The original design review used DeltaDCF `main` at commit `d13b2ea24a4a8446373b3bde51f86aab136f8f27`. The production-parity pass on 2026-08-29 separately inspected the local DeltaDCF `chore/production-deployment` working tree at HEAD `22e99fe`, including its uncommitted deployment files. DeltaDCF is a reference, not a code template or proof of deployment. Its checklist and deterministic valuation concepts are retained; its Vite layout, path assumptions, synchronous orchestration, process-local caches, and weak evidence locators are not adopted unchanged.
+- **An evidence-backed valuation:** projected cash flows, terminal value, enterprise value, equity value, and intrinsic value per share.
+- **Company-specific assumptions:** deterministic baselines derived from financial history, cash-flow stability, maturity, and versioned sector priors.
+- **Transparent AI adjustments:** baseline, adjustment, final assumption, rationale, supporting evidence, and valuation impact.
+- **Assumption sensitivity:** a range around one final valuation, not named bull/base/bear scenarios or a probability interval.
+- **The original ten-point checklist:** unchanged wording and order, with sector-aware applicability and `SUPPORTS`, `WEAKENS`, `MONITOR`, `UNKNOWN`, or `NOT_APPLICABLE` results.
+- **Traceable financial facts:** SEC concepts, units, fiscal periods, filing information, transformations, and source references travel with normalized data.
+- **Progressive detail:** a plain-English view with a deeper “Why?” layer for assumptions, calculations, and evidence.
+- **Market-price context when available:** a separate quote and plausibility assessment. An unavailable quote is not replaced with a fabricated price.
+
+## How it works
+
+```text
+Ticker
+  -> SEC issuer resolution, Company Facts, and filing metadata
+  -> Annual financial-fact normalization with evidence references
+  -> Deterministic adaptive baseline, DCF, and ten-point checklist
+  -> Optional Gemini review with Python-enforced validation
+  -> Final valuation, sensitivity, explanations, and evidence
+```
+
+SEC ingestion handles missing data, alternative XBRL concepts, comparative periods, amendments, and restatements. Requests use an honest User-Agent, pacing, bounded retries, timeouts, and memory caches.
+
+Gemini reviews a compact subset of up to 16 intact evidence items. It returns three assumption decisions, one to three evidence assessments, and up to three checklist comments. The full ten-item checklist still runs deterministically. Omitted evidence is not treated as adverse evidence, and every AI claim must reference an evidence ID actually supplied to the model.
 
 ## Repository structure
 
 ```text
-apps/web/       Next.js TypeScript frontend for Vercel
-apps/api/       FastAPI backend and root-context Dockerfile for Render
-docs/           Product and engineering specifications
-render.yaml     Render Blueprint for the API service
+web/                          Current React/Vite frontend
+apps/web/                     Earlier Next.js/TypeScript frontend, retained as legacy
+apps/api/app/                 FastAPI service and backend domain modules
+apps/api/tests/               Backend unit and integration tests
+apps/api/Dockerfile           Render API image
+apps/api/Dockerfile.workflows  Separate Render Workflow image
+docs/                         Methodology, contracts, architecture, and runbooks
+render.yaml                   Render Blueprint for the API web service
+Makefile                      Local development and Docker commands
 ```
 
-`packages/shared` is intentionally deferred until an OpenAPI-derived schema or another real cross-runtime contract exists.
+Root npm commands target `web/`. The earlier Next.js app is available through the `*:legacy` scripts. `packages/shared` is not currently needed and has not been introduced.
 
-## Local development
+Some architecture documents describe the original Next.js design. For the current frontend, use the root scripts, `web/vite.config.js`, and `web/vercel.json` as the configuration reference.
 
-Prerequisites: Node.js 20.9 or newer, Python 3.12 or newer, Docker, and `make`.
+## Run locally
+
+Use Node.js 24, Python 3.12 or newer, npm, and `make`. Docker is optional unless you want to test deployment images.
+
+From the repository root:
 
 ```bash
-make install       # Install web and isolated API development dependencies
-make dev-web       # Start Next.js on http://localhost:3000
-make dev-api       # Start FastAPI on http://localhost:8000
-make lint          # Lint the frontend
-make typecheck     # Type-check the frontend
-make test          # Run frontend and backend tests
-NEXT_PUBLIC_API_URL=https://api.example.invalid make build-web
-                   # Build the frontend with an explicit non-secret API origin
-make docker-build  # Build dcflens-api from the monorepo root
-make docker-run    # Run the API container on port 8000
-make health        # Call GET /health
+npm ci
+make install-api
+cp -n apps/api/.env.example apps/api/.env
 ```
 
-Copy example environment files only when local overrides are needed:
+Edit `apps/api/.env` before requesting live analyses:
+
+- Set `SEC_IDENTITY` to your application name and a real, monitored contact email.
+- Set `GOOGLE_API_KEY` for Gemini analysis. Without it, deterministic analysis remains available when sufficient SEC data exists.
+- Keep secrets in this local environment file, never in source code or public frontend variables.
+
+Start the backend in one terminal:
 
 ```bash
-cp apps/web/.env.example apps/web/.env.local
-cp apps/api/.env.example apps/api/.env
-```
-
-The API loads `apps/api/.env` for local development. Docker excludes every `.env` file, and deployed values must come from Render's environment configuration.
-
-Start the backend and frontend in separate terminals:
-
-```bash
-# Terminal 1, from the repository root
 make dev-api
-
-# Terminal 2, from the repository root
-make dev-web
 ```
 
-Open `http://localhost:3000`, enter a ticker, and the browser calls
-`http://localhost:8000` through the centralized API client. Next.js uses this
-localhost origin only outside production. Vercel Production and Preview builds
-must set `NEXT_PUBLIC_API_URL` to the Render API origin. The page displays an
-explicit configuration error if the production variable is absent.
+Start the current frontend in another terminal:
 
-The client checks `GET /health` before analysis. A sleeping Render free-tier
-service stays in a bounded, recoverable “Backend waking up” state. Once healthy,
-the UI changes to “Analysis running” for `GET /api/analyze/{ticker}`. Provider,
-SEC, rate-limit, unsupported-ticker, timeout, and configuration outcomes remain
-distinct, and a retry keeps the last valid result visible.
+```bash
+DCFLENS_API=http://localhost:8000 npm run dev
+```
 
-## Deployment scaffold
+Open `http://localhost:5173`. The Vite development proxy forwards `/api` requests to the local backend. Without `DCFLENS_API`, the development proxy targets the hosted Render API.
 
-- Vercel project Root Directory: `apps/web`
-- Render Blueprint: repository-root `render.yaml`
-- Render Docker context: repository root
-- Render Dockerfile: `apps/api/Dockerfile`
-- Liveness endpoint: `GET /health`
-- No database and no `vercel.json`
-- Bounded 30-second Render shutdown window with a 25-second Uvicorn drain timeout
+Check the backend directly:
 
-## Current status
+```bash
+curl --fail http://localhost:8000/health
+curl --fail http://localhost:8000/api/analyze/AAPL
+```
 
-- Next.js and FastAPI scaffolds plus a route-independent deterministic DCF engine
-- SEC EDGAR client and annual financial-fact normalizer with claim-level evidence
-- Centralized frontend API URL validation
-- Production-oriented Docker and Render configuration
-- Gemini structured-output client and domain orchestration with strict Python validation and deterministic fallback
-- FastAPI `GET /api/analyze/{ticker}` orchestration with sanitized errors, structured logs, bounded caches, and duplicate suppression
-- The Next.js analysis route is connected to FastAPI through one bounded,
-  cancellable client with Render cold-start recovery and sanitized error mapping
-- No deployment performed
-- No remote repository changes made
+`GET /health` checks process liveness only. It does not call SEC or Gemini and does not prove those providers are available.
+
+### Environment configuration
+
+The complete backend example is [apps/api/.env.example](apps/api/.env.example).
+
+| Variable | Purpose |
+| --- | --- |
+| `SEC_IDENTITY` | Application name and monitored contact email for SEC access |
+| `GOOGLE_API_KEY` | Server-only Gemini credential |
+| `GEMINI_MODEL` | Primary model; the current default is `gemini-3.5-flash` |
+| `GEMINI_TIMEOUT_SECONDS` | Per-attempt I/O timeout, default `45` seconds |
+| `GEMINI_TOTAL_TIMEOUT_SECONDS` | Shared scheduling budget across models and retries, default `75` seconds |
+| `GEMINI_MAX_RETRIES` | Delayed transient retries per model, default `2` |
+| `GEMINI_BACKOFF_SECONDS` | Initial retry backoff, default `1` second, with exponential growth and jitter |
+| `APP_ENV` | `development` locally; `production` on Render |
+| `CORS_ALLOWED_ORIGINS` | Explicit comma-separated browser-origin allowlist |
+| `CACHE_TTL_SECONDS` | Process-local cache lifetime, default `900` seconds |
+| `CACHE_MAX_ENTRIES` | Cache size bound; the API Blueprint sets `16` |
+| `LOG_LEVEL` | Use `INFO` for operational diagnostics |
+| `ALPHAVANTAGE_API_KEY` | Optional server-only quote-provider key; when absent, the service uses Yahoo |
+| `PORT` | Render-injected listen port; Docker defaults to `8000` |
+
+The current Vite frontend calls same-origin `/api` paths and does not use `NEXT_PUBLIC_API_URL`. That variable belongs to the legacy Next.js frontend only. Neither frontend should receive SEC or Gemini credentials.
+
+### Legacy Next.js frontend
+
+To work on `apps/web` instead:
+
+```bash
+cp -n apps/web/.env.example apps/web/.env.local
+npm run dev:legacy
+```
+
+It runs on `http://localhost:3000`. Local API requests may default to `http://localhost:8000`; production builds require `NEXT_PUBLIC_API_URL`.
+
+## Tests and builds
+
+From the repository root:
+
+```bash
+npm test
+npm run lint
+npm run build
+apps/api/.venv/bin/python -m pytest apps/api/tests
+```
+
+Backend tests cover valuation math, adaptive assumptions, SEC normalization, provenance, checklist invariants, AI validation and fallback, caching, concurrency, settings, and HTTP behavior. Controlled inputs and provider doubles make these tests repeatable, but they do not certify live provider availability.
+
+Workflow tests require the optional dependencies in `apps/api/requirements-workflows.txt`. See the [Workflow runbook](docs/render-workflow-demo.md) for installation and Docker verification.
+
+For the legacy frontend, use `npm run test:legacy`, `npm run lint:legacy`, and `npm run typecheck:legacy`. The existing `make typecheck` target references a missing npm script; use the explicit legacy command instead.
+
+## Deployment
+
+### FastAPI on Render
+
+The repository-root `render.yaml` defines the Docker API service. Its build context is the repository root, its Dockerfile is `apps/api/Dockerfile`, and its health-check path is `/health`.
+
+The container runs as a non-root user. `python -m app` starts `app.main:app`, binds to `0.0.0.0`, respects `PORT`, and configures graceful shutdown. Environment files and frontend sources are excluded from the application image.
+
+To build and run it locally using your backend environment file:
+
+```bash
+docker build -f apps/api/Dockerfile -t dcflens-api .
+docker run --rm --env-file apps/api/.env -e PORT=8000 -p 8000:8000 dcflens-api
+```
+
+Enter production secrets in Render's environment settings. Use `APP_ENV=production` and an explicit `CORS_ALLOWED_ORIGINS` allowlist. Do not use a production wildcard or embed credentials in Docker build arguments.
+
+### Current frontend on Vercel
+
+- Root Directory: `web`
+- Framework preset: Vite
+- Build command: `npm run build`
+- Output directory: `dist`
+- API routing: `web/vercel.json` rewrites `/api/:path*` to the Render backend.
+
+If the backend URL changes, update the rewrite destination and development proxy configuration. The legacy Next.js deployment instead uses Root Directory `apps/web`, the Next.js preset, and `NEXT_PUBLIC_API_URL`.
+
+## Render Workflows
+
+DCFLens has an optional, separate Render Workflow. Its `analyze_company` task runs the same backend pipeline outside a browser request and returns the full analysis as JSON.
+
+This gives a demo or operator a tracked task run with input, execution logs, completion status, and inspectable output. It does not replace the web API or automatically connect the website to background jobs.
+
+The Workflow uses `apps/api/Dockerfile.workflows`, repository-root build context, and `python -m app.workflow`. Configure its environment separately from the API service. The SDK entry point needs Render's managed runtime and is not a standalone local web server.
+
+For a dashboard demo, start `analyze_company` with arguments `["AAPL"]`. In the output:
+
+- `result.analysis.final_valuation` contains the valuation.
+- `result.analysis` contains assumptions, sensitivity, checklist results, and evidence.
+- `ai_status` tells you whether AI was `APPLIED` or the deterministic fallback was used.
+
+A succeeded task does not necessarily mean Gemini succeeded. The task has a 300-second timeout and no whole-task retries; bounded SEC and Gemini retries still apply. Separate task runs do not share an analysis cache or deduplication boundary.
+
+See the [Render Workflow demo guide](docs/render-workflow-demo.md) for setup, task arguments, environment variables, and operational limits.
+
+## Reliability and current limits
+
+- Gemini timeouts, quota limits, unavailable models, and rejected output can produce `DETERMINISTIC_FALLBACK`. Only `analysis.status: APPLIED` confirms that AI output passed validation.
+- Bounded retries and a reviewed fallback model reduce transient failures but cannot guarantee availability. A timeout is not, by itself, evidence of an invalid key or rate limit.
+- Inspect Render logs filtered by `gemini_` and correlate entries by `gemini_call_id`. Diagnostics include model, request size, timeout, duration, and failure phase without logging keys or full prompts.
+- The current browser analysis deadline is 90 seconds. Cold starts, SEC retrieval, and AI recovery can exceed it. The Workflow is a separate option for longer-running tasks.
+- Caches are bounded and process-local. They do not depend on persistent Render disk and are not shared across replicas or Workflow runs.
+- Issuer support depends on SEC coverage and usable financial inputs. This is not a guarantee of support for every US stock or every business type.
+- The live AI pipeline currently reviews structured financial-fact summaries, not a complete 10-K narrative or subsidiary audit.
+- Missing SEC inputs or market quotes remain explicit. Sample UI fixtures are for development and testing, not a substitute for failed live analyses.
+
+See [API diagnostics and error contracts](docs/api-service.md) for troubleshooting.
+
+## Documentation
+
+| Topic | Reference |
+| --- | --- |
+| Product and architecture | [Requirements](docs/product-requirements.md), [architecture](docs/technical-architecture.md), [data flow](docs/data-flow.md) |
+| Valuation | [DCF engine](docs/dcf-engine.md), [methodology](docs/valuation-methodology.md), [adaptive baseline](docs/adaptive-baseline.md) |
+| SEC and evidence | [Ingestion](docs/sec-ingestion.md), [provenance](docs/evidence-provenance.md) |
+| Checklist | [Original ten items](docs/deltadcf-checklist.md), [checklist engine](docs/checklist-engine.md) |
+| AI safeguards | [Trust model](docs/trust-model.md), [AI boundaries](docs/ai-trust-boundaries.md) |
+| Backend and Workflows | [API service](docs/api-service.md), [Workflow demo](docs/render-workflow-demo.md) |
+| Frontend | [Current frontend](web/README.md), [legacy integration](docs/frontend-backend-integration.md) |
+| Deployment history | [Architecture](docs/deployment-architecture.md), [runbook](docs/production-deployment.md), [DeltaDCF mapping](docs/deployment-mapping.md) |
+| DeltaDCF reference | [Comparison](docs/deltadcf-comparison.md) |
+
+Older design and deployment documents retain historical Next.js and release-verification context. They should not be read as a fresh audit of hosted services or as instructions to deploy the current Vite app from `apps/web`.
+
+## Research, not financial advice
+
+DCFLens is a research and educational tool. A DCF is sensitive to its assumptions, and evidence may be incomplete. Confidence describes data support and analytical robustness, not the probability of a future stock price. Read the primary filings and apply your own judgment.
