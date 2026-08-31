@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filedOn, evidenceValue } from './EvidenceDrawer.jsx'
+import { filedOn, evidenceValue, transformationGloss } from './EvidenceDrawer.jsx'
 import { EMPTY } from '../lib/format.js'
 
 /* Only the two pure functions. The drawer's rendering is checked by eye against
@@ -46,5 +46,44 @@ describe('evidenceValue', () => {
   it('is an em dash for a figure we do not have — never a zero', () => {
     expect(evidenceValue(null, 'USD')).toBe(EMPTY)
     expect(evidenceValue(undefined, 'decimal_ratio')).toBe(EMPTY)
+  })
+})
+
+/* The transformation strings the live envelope actually sends, on 2026-08-31. The
+   long ones are why the raw string stopped being printed at all. */
+const REPORTED = 'reported_value'
+const FCF_OCF =
+  'free_cash_flow = operating_cash_flow - abs(capital_expenditure); source transformation: reported_value'
+const FCF_CAPEX =
+  'free_cash_flow = operating_cash_flow - abs(capital_expenditure); source transformation: absolute_value(reported_value)'
+
+describe('transformationGloss', () => {
+  it('reads a bare tag into English', () => {
+    expect(transformationGloss(REPORTED)).toMatch(/exactly as reported/i)
+  })
+
+  /* The one the screenshot was about: a derived field arrives with its formula
+     attached, and the formula is not what gets printed — the tag after it is. */
+  it('takes the source tag out of a derived transformation and glosses that', () => {
+    const said = transformationGloss(FCF_OCF)
+    expect(said).toBe(transformationGloss(REPORTED))
+    expect(said).not.toMatch(/free_cash_flow|operating_cash_flow|abs\(/)
+  })
+
+  it('distinguishes a figure whose sign was taken off from one that was not', () => {
+    expect(transformationGloss(FCF_CAPEX)).not.toBe(transformationGloss(FCF_OCF))
+    expect(transformationGloss(FCF_CAPEX)).toMatch(/negative/i)
+  })
+
+  it('unwraps a wrapper it does not know around a tag it does', () => {
+    expect(transformationGloss('rounded(reported_value)')).toBe(transformationGloss(REPORTED))
+  })
+
+  /* Null, never the tag itself — printing the tag is the thing this replaced. */
+  it('is null for a tag we have no English for, and for nothing at all', () => {
+    expect(transformationGloss('some_new_tag_v2')).toBe(null)
+    expect(transformationGloss('')).toBe(null)
+    expect(transformationGloss(null)).toBe(null)
+    expect(transformationGloss(undefined)).toBe(null)
   })
 })
