@@ -141,6 +141,15 @@ def test_request_sends_browser_user_agent_and_json_accept() -> None:
     assert transport.calls[0]["url"] == AAPL_URL
 
 
+def test_default_identity_is_not_pinned_to_an_obsolete_browser() -> None:
+    transport = QueueTransport()
+    transport.queue(AAPL_URL, json_response(chart_payload()))
+
+    YahooQuoteClient(transport=transport).get_quote("AAPL")
+
+    assert transport.calls[0]["headers"]["User-Agent"] == "Mozilla/5.0"
+
+
 def test_resolved_symbol_mismatch_is_fatal() -> None:
     with pytest.raises(QuoteDataError, match="different listing"):
         quote_for(chart_payload(symbol="AAPL.MX"))

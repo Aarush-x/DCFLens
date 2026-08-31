@@ -539,7 +539,7 @@ export default function VerdictBanner({ data }) {
               label="The price"
               word="No share price yet"
               color="var(--faint)"
-              clause="A reading here is price against value, and we have the value half only. We won't make the other half up."
+              clause={data.price?.unavailable_message || "A reading here is price against value, and we have the value half only. We won't make the other half up."}
             />
           )}
           <Axis

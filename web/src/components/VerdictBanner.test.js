@@ -7,13 +7,38 @@
  * Pure functions only; there is no DOM renderer in this build.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import React, { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 import { readConfidence } from './ConfidenceChip.jsx'
-import { COMBINATIONS, combinationFor, legalCombination, tensionFor } from './VerdictBanner.jsx'
+import VerdictBanner, { COMBINATIONS, combinationFor, legalCombination, tensionFor } from './VerdictBanner.jsx'
+import { toView } from '../lib/adapter.js'
+import envelope from '../mocks/msft-live.json'
 
 const QUALITIES = ['strong', 'weak', 'uncertain', 'insufficient']
 const LABELS = ['UNDERVALUED', 'FAIRLY_PRICED', 'OVERVALUED']
+
+it('renders the API explanation when a quote is unavailable', () => {
+  const data = toView({
+    ...envelope,
+    market_price: {
+      status: 'UNAVAILABLE', quote: null,
+      unavailable_reason: 'quote_provider_rate_limited',
+      message: 'The price service is busy. Try again in a moment.',
+    },
+  })
+  // Vitest 3's JSX transform uses the classic runtime with this Vite 8 setup.
+  vi.stubGlobal('React', React)
+  try {
+    const html = renderToStaticMarkup(createElement(VerdictBanner, { data }))
+    expect(html).toContain('No share price yet')
+    expect(html).toContain('The price service is busy. Try again in a moment.')
+    expect(html).not.toContain('value half only')
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
 
 describe('the combination headline', () => {
   it('only ever produces one of the six strings docs/API.md allows', () => {

@@ -23,7 +23,7 @@ from app.data.market.models import (
 )
 from app.data.transport import TransportFailure
 from app.services.cache import MemoryCache, SingleFlight
-from app.services.quote import MarketPriceService, UNAVAILABLE_MESSAGES
+from app.services.quote import FallbackQuoteProvider, MarketPriceService, UNAVAILABLE_MESSAGES
 
 
 class FakeClock:
@@ -102,6 +102,81 @@ def test_a_missing_provider_is_disabled_and_never_calls_out() -> None:
     # A deployment state, not a failure: nothing is cached and nothing is fetched.
     assert len(success_cache) == 0
     assert len(failure_cache) == 0
+
+
+def test_healthy_primary_does_not_call_the_backup() -> None:
+    primary = RecordingProvider(build_quote(price=200.0))
+    backup = RecordingProvider()
+    provider = FallbackQuoteProvider(primary, backup)
+
+    assert provider.get_quote("AAPL").price == 200.0
+    assert backup.calls == []
+
+
+@pytest.mark.parametrize("failure", [
+    QuoteRateLimitError("quota exhausted"),
+    QuoteRequestError(url="https://example.com", message="timeout", attempts=1),
+    QuoteDataError("invalid response"),
+    QuoteNotFoundError("listing missing"),
+])
+def test_primary_failure_returns_and_caches_the_backup_with_its_provenance(failure) -> None:
+    primary = RecordingProvider(failure)
+    expected = build_quote(price=201.5)
+    backup = RecordingProvider(expected)
+    service, _, _ = build_service(FallbackQuoteProvider(primary, backup))
+
+    assert service.price_for("AAPL").quote is expected
+    assert service.price_for("AAPL").quote is expected
+    assert primary.calls == ["AAPL"]
+    assert backup.calls == ["AAPL"]
+
+
+def test_primary_rate_limit_cooldown_spans_tickers_and_then_recovers() -> None:
+    clock = FakeClock()
+    primary = RecordingProvider(QuoteRateLimitError("daily limit"))
+    backup = RecordingProvider()
+    provider = FallbackQuoteProvider(primary, backup, clock=clock)
+
+    provider.get_quote("AAPL")
+    primary.outcome = build_quote("NVDA", price=205.0)
+    clock.advance(299)
+    assert provider.get_quote("MSFT").symbol == "MSFT"
+    assert primary.calls == ["AAPL"]
+    clock.advance(1)
+    assert provider.get_quote("NVDA").price == 205.0
+    assert primary.calls == ["AAPL", "NVDA"]
+    assert backup.calls == ["AAPL", "MSFT"]
+
+
+def test_both_feeds_failing_stays_unavailable_and_retries_after_failure_ttl() -> None:
+    clock = FakeClock()
+    primary = RecordingProvider(QuoteRateLimitError("daily limit"))
+    backup = RecordingProvider(QuoteRateLimitError("busy"))
+    service, _, _ = build_service(
+        FallbackQuoteProvider(primary, backup, clock=clock), clock=clock,
+    )
+
+    first = service.price_for("AAPL")
+    assert first.quote is None
+    assert first.unavailable_reason is QuoteUnavailableReason.PROVIDER_RATE_LIMITED
+    assert service.price_for("AAPL") is first
+    assert backup.calls == ["AAPL"]
+    backup.outcome = build_quote()
+    clock.advance(30)
+    assert service.price_for("AAPL").status is QuoteStatus.AVAILABLE
+    assert primary.calls == ["AAPL"]
+    assert backup.calls == ["AAPL", "AAPL"]
+
+
+def test_fallback_logs_do_not_include_provider_exception_details(caplog) -> None:
+    primary = RecordingProvider(QuoteDataError("apikey=secret-provider-key"))
+    provider = FallbackQuoteProvider(primary, RecordingProvider())
+
+    provider.get_quote("AAPL")
+
+    assert "market_quote_fallback" in caplog.text
+    assert "secret-provider-key" not in caplog.text
+    assert caplog.records[-1].reason == "QuoteDataError"
 
 
 def test_a_successful_quote_is_cached_for_its_ttl() -> None:

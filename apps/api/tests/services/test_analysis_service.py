@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from fastapi.encoders import jsonable_encoder
 
 from app.ai.models import AiAnalysisStatus, ConfidenceLevel
-from app.data.market.errors import QuoteRequestError
+from app.data.market.errors import QuoteRateLimitError, QuoteRequestError
 from app.data.market.models import (
     MarketPrice,
     MarketQuote,
@@ -460,8 +460,46 @@ def test_build_analysis_service_wires_a_quote_provider_by_default() -> None:
 def test_market_quote_enabled_false_is_the_kill_switch() -> None:
     from app.services.analysis import build_analysis_service
 
-    service = build_analysis_service(_settings(MARKET_QUOTE_ENABLED="false"))
+    service = build_analysis_service(_settings(
+        MARKET_QUOTE_ENABLED="false", ALPHAVANTAGE_API_KEY="testkey123",
+    ))
 
     assert service._prices._provider is None
     price = service._prices.price_for("AAPL")
     assert price.unavailable_reason is QuoteUnavailableReason.PROVIDER_DISABLED
+
+
+def test_configured_primary_rate_limit_recovers_a_price_in_the_envelope(monkeypatch) -> None:
+    calls = []
+    expected = _quote(150.0).quote
+
+    def throttled(self, ticker):
+        calls.append("alpha")
+        raise QuoteRateLimitError("quota exhausted")
+
+    def backup(self, ticker):
+        calls.append("yahoo")
+        return expected
+
+    monkeypatch.setattr(module.AlphaVantageQuoteClient, "get_quote", throttled)
+    monkeypatch.setattr(module.YahooQuoteClient, "get_quote", backup)
+    service = module.build_analysis_service(_settings(ALPHAVANTAGE_API_KEY="testkey123"))
+    _stub_analysis(monkeypatch, service, _company())
+
+    payload = service.analyze("AAPL").to_dict()
+
+    assert payload["market_price"]["status"] == "AVAILABLE"
+    assert payload["market_price"]["quote"]["price"] == 150.0
+    assert payload["market_price"]["quote"]["source"] == expected.source
+    assert PlausibilitySignal.NO_MARKET_PRICE not in {
+        reason["signal"] for reason in payload["plausibility"]["reasons"]
+    }
+    assert calls == ["alpha", "yahoo"]
+
+
+def test_invalid_primary_key_keeps_yahoo_available(monkeypatch) -> None:
+    expected = _quote(150.0)
+    monkeypatch.setattr(module.YahooQuoteClient, "get_quote", lambda self, ticker: expected.quote)
+    service = module.build_analysis_service(_settings(ALPHAVANTAGE_API_KEY="invalid key"))
+
+    assert service._prices.price_for("AAPL") == expected

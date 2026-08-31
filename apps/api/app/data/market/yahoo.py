@@ -31,12 +31,10 @@ QUOTE_SOURCE = "yahoo_finance_chart"
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 SYMBOL_PATTERN = re.compile(r"^[A-Z][A-Z0-9.-]{0,9}$")
 CURRENCY_PATTERN = re.compile(r"^[A-Za-z]{3}$")
-# Yahoo answers an unidentified client with an immediate 429. Verified: without
-# a browser User-Agent this endpoint never returns a quote at all.
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
+# The previous pinned Chrome/126 identity received HTTP 429 in a live adapter
+# check while this minimal identity succeeded. Keep the operator override: an
+# accepted identity does not guarantee access or bypass provider quotas.
+DEFAULT_USER_AGENT = "Mozilla/5.0"
 
 
 @dataclass(frozen=True, slots=True)

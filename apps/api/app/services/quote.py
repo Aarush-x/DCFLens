@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import socket
-from typing import Protocol
+import time
+from threading import Lock
+from typing import Callable, Protocol
 from urllib.error import URLError
 
 from app.data.market.errors import (
@@ -47,6 +49,52 @@ class QuoteGateway(Protocol):
     """The one thing this service needs from a quote provider."""
 
     def get_quote(self, ticker: str) -> MarketQuote: ...
+
+
+class FallbackQuoteProvider:
+    """Try the configured feed, then an independently validated backup quote.
+
+    A rate limit applies across tickers. Give the primary a five-minute rest
+    instead of consuming another request every time a different ticker is read.
+    The service still owns quote TTLs, failure caching and request coalescing.
+    """
+
+    def __init__(
+        self,
+        primary: QuoteGateway,
+        fallback: QuoteGateway,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self._clock = clock
+        self._retry_primary_at = 0.0
+        self._lock = Lock()
+
+    def get_quote(self, ticker: str) -> MarketQuote:
+        with self._lock:
+            try_primary = self._clock() >= self._retry_primary_at
+        if try_primary:
+            try:
+                return self._primary.get_quote(ticker)
+            except (QuoteRateLimitError, QuoteRequestError, QuoteDataError, QuoteNotFoundError) as exc:
+                if isinstance(exc, QuoteRateLimitError):
+                    with self._lock:
+                        self._retry_primary_at = self._clock() + 300.0
+                # Do not log exception text, response bodies or signed URLs.
+                logger.warning(
+                    "market_quote_fallback",
+                    extra={
+                        "ticker": ticker,
+                        "provider": type(self._primary).__name__,
+                        "fallback_provider": type(self._fallback).__name__,
+                        "reason": type(exc).__name__,
+                    },
+                )
+        # Preserve the backup's source and timestamps. If it also fails, the
+        # service returns its typed unavailable reason, never a fabricated price.
+        return self._fallback.get_quote(ticker)
 
 
 def _unavailable(reason: QuoteUnavailableReason) -> MarketPrice:

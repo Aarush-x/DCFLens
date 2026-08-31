@@ -111,10 +111,23 @@ The complete backend example is [apps/api/.env.example](apps/api/.env.example).
 | `CACHE_TTL_SECONDS` | Process-local cache lifetime, default `900` seconds |
 | `CACHE_MAX_ENTRIES` | Cache size bound; the API Blueprint sets `16` |
 | `LOG_LEVEL` | Use `INFO` for operational diagnostics |
-| `ALPHAVANTAGE_API_KEY` | Optional server-only quote-provider key; when absent, the service uses Yahoo |
+| `ALPHAVANTAGE_API_KEY` | Optional server-only key; Alpha Vantage primary with Yahoo fallback, or Yahoo alone when absent |
 | `PORT` | Render-injected listen port; Docker defaults to `8000` |
 
 The current Vite frontend calls same-origin `/api` paths and does not use `NEXT_PUBLIC_API_URL`. That variable belongs to the legacy Next.js frontend only. Neither frontend should receive SEC or Gemini credentials.
+
+Quotes use Alpha Vantage first when configured, then Yahoo on a rate limit,
+request failure, missing listing or invalid response. A rate-limited primary is
+skipped for five minutes across tickers. Each provider retains its bounded timeout
+and retry policy; successful quotes keep their actual source and timestamps and
+are cached for `MARKET_QUOTE_TTL_SECONDS` (60 seconds by default). If both feeds
+fail, the API returns an explicit unavailable reason and the UI displays it.
+`MARKET_QUOTE_ENABLED=false` disables both feeds. These are latest available
+quotes, not a guaranteed realtime stream: Alpha Vantage's default `GLOBAL_QUOTE`
+is [updated at the end of the trading day](https://www.alphavantage.co/documentation/#latestprice).
+Yahoo uses a minimal browser User-Agent by default; `MARKET_QUOTE_USER_AGENT`
+can override it. Provider quotas and hosting-IP restrictions can still prevent
+quotes from being returned, even when the application is configured correctly.
 
 ### Legacy Next.js frontend
 

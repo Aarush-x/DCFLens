@@ -314,9 +314,8 @@ class Settings:
             market_quote_user_agent=_user_agent(
                 "MARKET_QUOTE_USER_AGENT", environment
             ),
-            # Presence of this key is what selects the quote provider: set it and
-            # the price comes from Alpha Vantage, leave it unset and the Yahoo
-            # client stands exactly as before. One variable rather than a provider
+            # This key selects Alpha Vantage as primary, with Yahoo as fallback.
+            # Leave it unset to use Yahoo alone. One variable rather than a provider
             # name plus a key, because a name without a key is a broken config
             # that only fails at the first request.
             alphavantage_api_key=_clean(environment.get("ALPHAVANTAGE_API_KEY")) or None,

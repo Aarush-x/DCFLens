@@ -40,7 +40,7 @@ from app.valuation.adaptive import CompanyProfile, classify_company
 from app.valuation.models import DcfInput, DcfValidationError, SensitivityConfig
 from app.services.cache import CacheBackend, MemoryCache, SingleFlight
 from app.services.plausibility import PlausibilityAssessment, assess_plausibility
-from app.services.quote import MarketPriceService
+from app.services.quote import FallbackQuoteProvider, MarketPriceService
 from app.services.errors import (
     CalculationError,
     InvalidTickerError,
@@ -429,25 +429,25 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
             # a None it will rightly reject.
             quote_config["user_agent"] = settings.market_quote_user_agent
         try:
+            quote_provider = YahooQuoteClient(YahooQuoteConfig(**quote_config))
             if settings.alphavantage_api_key:
                 # Alpha Vantage authenticates the caller, so it does not need the
                 # browser User-Agent Yahoo demands -- that override is dropped
                 # rather than passed to a config that has no field for it.
-                quote_provider = AlphaVantageQuoteClient(
+                primary = AlphaVantageQuoteClient(
                     AlphaVantageQuoteConfig(
                         api_key=settings.alphavantage_api_key,
                         timeout_seconds=float(settings.market_quote_timeout_seconds),
                         max_retries=settings.market_quote_max_retries,
                     )
                 )
-            else:
-                quote_provider = YahooQuoteClient(YahooQuoteConfig(**quote_config))
+                quote_provider = FallbackQuoteProvider(primary, quote_provider)
         except QuoteConfigurationError:
             # This runs lazily inside the first request, so an exception escaping
             # here would 500 every request for the life of the process. Degrading
-            # to no provider keeps the promise even when the quote client's own
-            # configuration is what is broken.
-            logger.warning("market_quote_provider_disabled_by_configuration")
+            # to Yahoo (or no provider if Yahoo's config failed) keeps analysis
+            # available even when the primary quote configuration is broken.
+            logger.warning("market_quote_provider_configuration_failed")
         else:
             # Names the provider once at wiring time. Without it, "is my key
             # actually being used?" is only answerable by reading the code.
