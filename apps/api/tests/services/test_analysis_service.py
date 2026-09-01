@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import threading
 from types import SimpleNamespace
 
 from fastapi.encoders import jsonable_encoder
@@ -30,6 +31,7 @@ from app.services.analysis import (
 from app.services.cache import MemoryCache
 from app.services.plausibility import PlausibilityLevel, PlausibilitySignal
 from app.services.quote import MarketPriceService
+from app.services.snapshots import StoredSnapshot
 from app.services.errors import (
     InvalidTickerError,
     ProviderRateLimitError,
@@ -92,6 +94,22 @@ def _analysis_result(
 def _fixed_prices(price: MarketPrice = DISABLED_PRICE):
     """A quote service that never raises, exactly as the real one promises."""
     return SimpleNamespace(price_for=lambda ticker: price)
+
+
+class _Snapshots:
+    def __init__(self, snapshot=None):
+        self.snapshot = snapshot
+        self.set_calls = []
+        self.touched = threading.Event()
+
+    def get(self, key):
+        return self.snapshot
+
+    def set(self, key, value, *, ticker, source_accession):
+        self.set_calls.append((key, value, ticker, source_accession))
+
+    def touch(self, key):
+        self.touched.set()
 
 
 def _company() -> CompanyData:
@@ -311,6 +329,101 @@ def test_market_price_is_never_served_from_the_analysis_cache(monkeypatch) -> No
         100.0,
         101.0,
     )
+
+
+def test_durable_snapshot_survives_a_new_service_process_without_reanalysis(
+    monkeypatch,
+) -> None:
+    now = datetime.now(timezone.utc)
+    core = AnalysisCore(
+        ticker="AAPL",
+        cik="0000320193",
+        company_name="Apple Inc.",
+        sec_retrieved_at=now,
+        latest_filing=None,
+        missing_metrics=(),
+        normalization_warnings=(),
+        analysis=_analysis_result(),
+    )
+    snapshots = _Snapshots(
+        StoredSnapshot(core, "acc-1", now, now + timedelta(hours=2))
+    )
+    service = AnalysisService(
+        sec=SimpleNamespace(),
+        provider=SimpleNamespace(),
+        normalized_cache=_cache(),
+        deterministic_cache=_cache(),
+        analysis_cache=_cache(),
+        snapshot_store=snapshots,
+        prices=_fixed_prices(),
+    )
+    monkeypatch.setattr(
+        service,
+        "_analyze_uncached",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("durable hit must not rerun SEC or Gemini")
+        ),
+    )
+
+    assert service.analyze("AAPL").core is core
+
+
+def test_stale_snapshot_returns_immediately_and_revalidates_in_background(
+    monkeypatch,
+) -> None:
+    now = datetime.now(timezone.utc)
+    core = AnalysisCore(
+        ticker="AAPL",
+        cik="0000320193",
+        company_name="Apple Inc.",
+        sec_retrieved_at=now,
+        latest_filing=None,
+        missing_metrics=(),
+        normalization_warnings=(),
+        analysis=_analysis_result(),
+    )
+    snapshot = StoredSnapshot(core, "acc-1", now, now - timedelta(seconds=1))
+    snapshots = _Snapshots(snapshot)
+    service = AnalysisService(
+        sec=SimpleNamespace(),
+        provider=SimpleNamespace(),
+        normalized_cache=_cache(),
+        deterministic_cache=_cache(),
+        analysis_cache=_cache(),
+        snapshot_store=snapshots,
+        prices=_fixed_prices(),
+    )
+    monkeypatch.setattr(service, "_filing_is_unchanged", lambda *_args: True)
+    monkeypatch.setattr(
+        service,
+        "_analyze_uncached",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unchanged filing must not spend Gemini tokens")
+        ),
+    )
+
+    assert service.analyze("AAPL").core is core
+    assert snapshots.touched.wait(timeout=1)
+
+
+def test_market_context_reuses_core_and_only_refreshes_price(monkeypatch) -> None:
+    company = _company()
+    prices = []
+
+    class _MovingPrices:
+        def price_for(self, ticker):
+            prices.append(100.0 + len(prices))
+            return _quote(prices[-1])
+
+    service = _service(prices=_MovingPrices())
+    _stub_analysis(monkeypatch, service, company)
+
+    original = service.analyze("AAPL")
+    market = service.market_context("AAPL")
+
+    assert original.core is service._analysis_cache.get("AAPL")
+    assert market.market_price.quote.price == 101.0
+    assert prices == [100.0, 101.0]
 
 
 def test_quote_failure_still_returns_a_full_analysis(monkeypatch) -> None:

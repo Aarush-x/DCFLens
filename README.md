@@ -110,6 +110,10 @@ The complete backend example is [apps/api/.env.example](apps/api/.env.example).
 | `CORS_ALLOWED_ORIGINS` | Explicit comma-separated browser-origin allowlist |
 | `CACHE_TTL_SECONDS` | Process-local cache lifetime, default `900` seconds |
 | `CACHE_MAX_ENTRIES` | Cache size bound; the API Blueprint sets `16` |
+| `DATABASE_URL` | Optional server-only PostgreSQL URL for durable validated analysis snapshots |
+| `ANALYSIS_PIPELINE_VERSION` | Versioned prompt/parser/valuation cache namespace; default `v1` |
+| `ANALYSIS_REFRESH_HOUR_UTC` | Daily filing revalidation boundary; default `23` |
+| `DATABASE_CONNECT_TIMEOUT_SECONDS` | Bounded durable-cache connection timeout; default `5` seconds |
 | `LOG_LEVEL` | Use `INFO` for operational diagnostics |
 | `ALPHAVANTAGE_API_KEY` | Optional server-only key; Alpha Vantage primary with Yahoo fallback, or Yahoo alone when absent |
 | `PORT` | Render-injected listen port; Docker defaults to `8000` |
@@ -128,6 +132,15 @@ is [updated at the end of the trading day](https://www.alphavantage.co/documenta
 Yahoo uses a minimal browser User-Agent by default; `MARKET_QUOTE_USER_AGENT`
 can override it. Provider quotas and hosting-IP restrictions can still prevent
 quotes from being returned, even when the application is configured correctly.
+
+Completed filing analysis can be persisted independently of quotes by setting a
+PostgreSQL `DATABASE_URL`. The API serves the last validated snapshot across
+Render sleep and deploys, checks the filing accession once per day, and skips
+Gemini when the filing is unchanged. The browser stores a price-free copy in
+IndexedDB for an immediate reopen, while `/api/market-context/{ticker}` refreshes
+only the quote and price-relative checks every 60 seconds on a visible page. See
+[docs/caching.md](docs/caching.md) for the data model, free Neon setup, and
+failure behavior.
 
 ### Legacy Next.js frontend
 

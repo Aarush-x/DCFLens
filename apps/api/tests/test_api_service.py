@@ -36,6 +36,12 @@ class _FakeService:
             raise self.result
         return self.result
 
+    def market_context(self, ticker: str) -> _Response:
+        self.calls.append(ticker)
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
 
 def _client(service: _FakeService, *, production: bool = False) -> TestClient:
     values = {}
@@ -77,6 +83,24 @@ def test_analyze_returns_service_payload_and_request_id() -> None:
     # change is the assertion worth making.
     assert body["market_price"]["status"] == "AVAILABLE"
     assert body["plausibility"]["can_state_verdict"] is True
+
+
+def test_market_context_returns_only_the_live_price_lane() -> None:
+    service = _FakeService(
+        _Response(
+            {
+                "ticker": "AAPL",
+                "market_price": {"status": "AVAILABLE", "quote": {"price": 181.2}},
+                "plausibility": {"level": "SOUND", "can_state_verdict": True},
+            }
+        )
+    )
+
+    response = _client(service).get("/api/market-context/AAPL")
+
+    assert response.status_code == 200
+    assert response.json()["market_price"]["quote"]["price"] == 181.2
+    assert "analysis" not in response.json()
 
 
 @pytest.mark.parametrize(

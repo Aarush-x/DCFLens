@@ -6,6 +6,11 @@
 
 `GET /api/analyze/{ticker}` validates and normalizes the ticker, retrieves SEC Company Facts and submissions metadata, normalizes annual facts with claim-level evidence, builds deterministic adaptive assumptions, evaluates the unchanged ten-point checklist, calculates one DCF valuation and its sensitivity interval, and then optionally applies validated Gemini adjustments. The response includes latest filing metadata and every evidence reference carried by the domain results. A separate filing route is not currently justified because the analysis response already exposes accession-specific filing metadata and claim-level evidence URLs.
 
+`GET /api/market-context/{ticker}` reuses the cached price-free analysis and
+returns only `market_price` plus the cheap price-relative `plausibility`
+assessment. It does not rerun SEC normalization, deterministic valuation, annual
+report parsing, or Gemini when a memory or durable analysis snapshot exists.
+
 Gemini absence, timeout, rate limiting, malformed output, or provider failure preserves a successful deterministic valuation. The response `analysis.status` is `DETERMINISTIC_FALLBACK`, and `analysis.fallback_reason` distinguishes the outcome. Provider failures are logged without credentials, response bodies, or prompts.
 
 ### Diagnosing Gemini on Render
@@ -168,9 +173,19 @@ After Vercel assigns the production domain, set Render's `CORS_ALLOWED_ORIGINS` 
 
 ## Cache and concurrency model
 
-Three bounded TTL caches are separate: normalized SEC company data; provider-independent baseline, checklist, and DCF results; and completed AI-applied analysis responses. Transient Gemini fallbacks are never placed in the completed-analysis cache, so a later request can retry Gemini while reusing deterministic work. A per-ticker single-flight gate coalesces concurrent analysis requests in one process.
+Normalized SEC data, provider-independent calculations, completed AI-applied
+analysis, annual-report parsing, and quotes have separate bounded memory caches.
+Transient Gemini fallbacks are never placed in the completed-analysis cache, so
+a later request can retry Gemini while reusing deterministic work. A per-ticker
+single-flight gate coalesces concurrent analysis requests in one process.
 
-The prototype caches are in memory. They are cleared on restart, are not shared between Render instances, and cannot provide cross-instance duplicate suppression. Render's local filesystem is ephemeral and is not used as a cache. The cache boundary is a small `get`/`set` protocol, so Redis can replace the memory implementation without changing SEC normalization, the valuation engine, adaptive baselines, checklist rules, or Gemini validation.
+When `DATABASE_URL` is set, validated price-free `AnalysisCore` values are also
+stored in PostgreSQL JSONB. This L2 survives Render sleep, restart, and deploy.
+At the configured daily UTC boundary, the first request returns the existing
+snapshot and starts a bounded filing-accession check. An unchanged filing only
+advances the next check. A changed filing regenerates and replaces the snapshot
+after validation. PostgreSQL failures degrade to the L1 memory cache and never
+enter the valuation domain. Full behavior is documented in [caching.md](caching.md).
 
 ## Runtime
 

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import date, datetime
 from typing import Any, Protocol
+
+from pydantic import TypeAdapter
 
 from app.ai.gemini import GeminiClient, GeminiClientConfig, GeminiProviderError
 from app.ai.models import (
@@ -43,6 +46,12 @@ from app.valuation.models import DcfInput, DcfValidationError, SensitivityConfig
 from app.services.cache import CacheBackend, MemoryCache, SingleFlight
 from app.services.plausibility import PlausibilityAssessment, assess_plausibility
 from app.services.quote import FallbackQuoteProvider, MarketPriceService
+from app.services.snapshots import (
+    NullSnapshotStore,
+    PostgresSnapshotStore,
+    SnapshotStore,
+    StoredSnapshot,
+)
 from app.services.errors import (
     CalculationError,
     InvalidTickerError,
@@ -133,6 +142,22 @@ class AnalysisEnvelope:
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class MarketContext:
+    """The only response surface that changes with the market quote."""
+
+    ticker: str
+    market_price: MarketPrice
+    plausibility: PlausibilityAssessment
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ticker": self.ticker,
+            "market_price": _serialisable(self.market_price),
+            "plausibility": _serialisable(self.plausibility),
+        }
+
+
 def _serialisable(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
         return asdict(value)
@@ -161,6 +186,8 @@ class AnalysisService:
         prices: PriceGateway,
         singleflight: SingleFlight[str, AnalysisCore] | None = None,
         narrative_cache: CacheBackend[str, NarrativeContext] | None = None,
+        snapshot_store: SnapshotStore[AnalysisCore] | None = None,
+        snapshot_namespace: str = "v1",
     ) -> None:
         self._sec = sec
         self._provider = provider
@@ -169,6 +196,11 @@ class AnalysisService:
         self._analysis_cache = analysis_cache
         self._prices = prices
         self._singleflight = singleflight or SingleFlight()
+        self._snapshot_store = snapshot_store or NullSnapshotStore()
+        self._snapshot_namespace = snapshot_namespace
+        self._refresh_lock = threading.Lock()
+        self._refreshing: set[str] = set()
+        self._refresh_slots = threading.BoundedSemaphore(value=2)
         self._narrative_cache = (
             narrative_cache if narrative_cache is not None
             else MemoryCache(max_entries=8, ttl_seconds=900)
@@ -176,23 +208,61 @@ class AnalysisService:
 
     def analyze(self, raw_ticker: str) -> AnalysisEnvelope:
         ticker = normalize_ticker(raw_ticker)
-        core = self._analysis_cache.get(ticker)
-        if core is None:
-            core = self._singleflight.run(
-                ticker, lambda: self._analyze_uncached(ticker)
-            )
+        core = self._resolve_core(ticker)
         # Priced after the core resolves and outside the flight, deliberately:
         # a slow quote must not hold the analysis lock and stall every other
         # waiter on the same ticker.
         price = self._prices.price_for(ticker)
         return AnalysisEnvelope(core, price, assess_plausibility(core.analysis, price))
 
-    def _analyze_uncached(self, ticker: str) -> AnalysisCore:
-        cached = self._analysis_cache.get(ticker)
-        if cached is not None:
-            return cached
+    def market_context(self, raw_ticker: str) -> MarketContext:
+        """Return only live quote data and the cheap price-relative assessment."""
+        ticker = normalize_ticker(raw_ticker)
+        core = self._resolve_core(ticker)
+        price = self._prices.price_for(ticker)
+        return MarketContext(
+            ticker=ticker,
+            market_price=price,
+            plausibility=assess_plausibility(core.analysis, price),
+        )
 
-        company = self._load_company(ticker)
+    def refresh(self, raw_ticker: str) -> AnalysisCore:
+        """Synchronously revalidate a durable snapshot for a workflow or CLI."""
+        ticker = normalize_ticker(raw_ticker)
+        snapshot = self._snapshot_store.get(self._snapshot_key(ticker))
+        if snapshot is not None and self._filing_is_unchanged(ticker, snapshot):
+            self._snapshot_store.touch(self._snapshot_key(ticker))
+            self._analysis_cache.set(ticker, snapshot.value)
+            return snapshot.value
+        return self._analyze_uncached(ticker, force=True)
+
+    def _resolve_core(self, ticker: str) -> AnalysisCore:
+        core = self._analysis_cache.get(ticker)
+        if core is not None:
+            return core
+
+        snapshot = self._snapshot_store.get(self._snapshot_key(ticker))
+        if snapshot is not None:
+            self._analysis_cache.set(ticker, snapshot.value)
+            if snapshot.is_stale:
+                self._schedule_refresh(ticker, snapshot)
+            return snapshot.value
+
+        return self._singleflight.run(
+            ticker, lambda: self._analyze_uncached(ticker)
+        )
+
+    def _analyze_uncached(self, ticker: str, *, force: bool = False) -> AnalysisCore:
+        if not force:
+            cached = self._analysis_cache.get(ticker)
+            if cached is not None:
+                return cached
+
+        company = (
+            self._load_company(ticker, force=True)
+            if force
+            else self._load_company(ticker)
+        )
         analysis_input = _build_analysis_input(company)
         deterministic_key = (
             f"{ticker}:{company.normalized.retrieved_at.isoformat()}"
@@ -213,7 +283,11 @@ class AnalysisService:
 
         # Fetch/parse narrative only after the provider-independent valuation is
         # valid. Retrieval failures must never invalidate those financial facts.
-        narrative = self._load_narrative(company.resolution.cik)
+        narrative = (
+            self._load_narrative(company.resolution.cik, force=True)
+            if force
+            else self._load_narrative(company.resolution.cik)
+        )
         filing_evidence = tuple(
             AnalysisEvidence(
                 evidence_id=item.evidence_id, source_type="sec_filing_section",
@@ -253,6 +327,12 @@ class AnalysisService:
         )
         if result.status is AiAnalysisStatus.APPLIED and narrative.status != "UNAVAILABLE":
             self._analysis_cache.set(ticker, core)
+            self._snapshot_store.set(
+                self._snapshot_key(ticker),
+                core,
+                ticker=ticker,
+                source_accession=_latest_accession(company.profile),
+            )
         elif result.status is not AiAnalysisStatus.APPLIED:
             logger.info(
                 "analysis_completed_with_deterministic_fallback",
@@ -260,12 +340,72 @@ class AnalysisService:
             )
         return core
 
-    def _load_narrative(self, cik: str) -> NarrativeContext:
+    def _snapshot_key(self, ticker: str) -> str:
+        return f"analysis:{self._snapshot_namespace}:{ticker}"
+
+    def _schedule_refresh(
+        self,
+        ticker: str,
+        snapshot: StoredSnapshot[AnalysisCore],
+    ) -> None:
+        with self._refresh_lock:
+            if ticker in self._refreshing:
+                return
+            if not self._refresh_slots.acquire(blocking=False):
+                logger.info("analysis_refresh_deferred", extra={"ticker": ticker})
+                return
+            self._refreshing.add(ticker)
+
+        def refresh() -> None:
+            try:
+                if self._filing_is_unchanged(ticker, snapshot):
+                    self._snapshot_store.touch(self._snapshot_key(ticker))
+                    logger.info(
+                        "analysis_snapshot_revalidated",
+                        extra={"ticker": ticker, "filing_changed": False},
+                    )
+                    return
+                self._analyze_uncached(ticker, force=True)
+                logger.info(
+                    "analysis_snapshot_refreshed",
+                    extra={"ticker": ticker, "filing_changed": True},
+                )
+            except Exception as exc:
+                # Keep serving the last validated snapshot. No provider body,
+                # connection string, prompt, or filing text is logged.
+                logger.warning(
+                    "analysis_snapshot_refresh_failed",
+                    extra={"ticker": ticker, "error_type": type(exc).__name__},
+                )
+            finally:
+                with self._refresh_lock:
+                    self._refreshing.discard(ticker)
+                self._refresh_slots.release()
+
+        threading.Thread(
+            target=refresh,
+            name=f"analysis-refresh-{ticker}",
+            daemon=True,
+        ).start()
+
+    def _filing_is_unchanged(
+        self,
+        ticker: str,
+        snapshot: StoredSnapshot[AnalysisCore],
+    ) -> bool:
+        if not snapshot.source_accession:
+            return False
+        resolution = self._sec.resolve_ticker(ticker)
+        profile = self._sec.get_submission_profile(resolution.cik)
+        return _latest_accession(profile) == snapshot.source_accession
+
+    def _load_narrative(self, cik: str, *, force: bool = False) -> NarrativeContext:
         if isinstance(self._provider, _UnavailableGeminiProvider):
             return NarrativeContext("NOT_REQUESTED", warnings=("Gemini is not configured; narrative retrieval skipped.",))
-        cached = self._narrative_cache.get(cik)
-        if cached is not None:
-            return cached
+        if not force:
+            cached = self._narrative_cache.get(cik)
+            if cached is not None:
+                return cached
         fetch = getattr(self._sec, "get_latest_10k_for_cik", None)
         if fetch is None:
             return NarrativeContext("NOT_REQUESTED", warnings=("SEC gateway has no filing retrieval capability.",))
@@ -288,10 +428,11 @@ class AnalysisService:
                 for topic in TOPICS
             ), warnings=("Annual-report text could not be reviewed; structured financial analysis remains available.",))
 
-    def _load_company(self, ticker: str) -> CompanyData:
-        cached = self._normalized_cache.get(ticker)
-        if cached is not None:
-            return cached
+    def _load_company(self, ticker: str, *, force: bool = False) -> CompanyData:
+        if not force:
+            cached = self._normalized_cache.get(ticker)
+            if cached is not None:
+                return cached
         try:
             resolution = self._sec.resolve_ticker(ticker)
             document = self._sec.get_company_facts(resolution.cik)
@@ -451,6 +592,10 @@ def _analysis_evidence(
     return tuple(evidence_by_id.values())
 
 
+def _latest_accession(profile: CompanySubmissionProfile) -> str | None:
+    return profile.filings[0].accession_number if profile.filings else None
+
+
 def build_analysis_service(settings: Settings) -> AnalysisService:
     sec = SecClient(
         SecClientConfig(
@@ -522,6 +667,25 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
         "ttl_seconds": float(settings.cache_ttl_seconds),
     }
     quote_cache_args = {"max_entries": settings.market_quote_cache_max_entries}
+    snapshot_store: SnapshotStore[AnalysisCore] = NullSnapshotStore()
+    snapshot_namespace = (
+        f"{settings.analysis_pipeline_version}:{settings.gemini_model}"
+    )
+    if settings.database_url:
+        adapter = TypeAdapter(AnalysisCore)
+        snapshot_store = PostgresSnapshotStore(
+            database_url=settings.database_url,
+            encoder=lambda core: adapter.dump_python(core, mode="json"),
+            decoder=lambda payload: adapter.validate_python(payload),
+            refresh_hour_utc=settings.analysis_refresh_hour_utc,
+            connect_timeout_seconds=settings.database_connect_timeout_seconds,
+        )
+        logger.info(
+            "durable_analysis_cache_configured",
+            extra={"pipeline_version": settings.analysis_pipeline_version},
+        )
+    else:
+        logger.info("durable_analysis_cache_disabled")
     return AnalysisService(
         sec=sec,
         provider=provider,
@@ -529,6 +693,8 @@ def build_analysis_service(settings: Settings) -> AnalysisService:
         deterministic_cache=MemoryCache(**cache_args),
         analysis_cache=MemoryCache(**cache_args),
         narrative_cache=MemoryCache(**cache_args),
+        snapshot_store=snapshot_store,
+        snapshot_namespace=snapshot_namespace,
         prices=MarketPriceService(
             provider=quote_provider,
             # Two caches because a successful quote and a failed one deserve very

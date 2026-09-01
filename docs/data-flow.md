@@ -13,8 +13,9 @@
 8. Filing extractor collects bounded, labeled sections and Exhibit 21
 9. Gemini returns schema-constrained qualitative findings with evidence IDs
 10. API validates findings, applies three code-bounded adjustments, and recalculates one final valuation
-11. API returns valuation, checklist, claims, evidence, warnings, and freshness; only completed AI-applied analyses enter the response cache
-12. Web renders results with direct source links
+11. API stores a validated, price-free analysis snapshot in memory and optional PostgreSQL
+12. API attaches an independently refreshed quote and price-relative plausibility
+13. Web renders results with direct source links and persists only the price-free core in IndexedDB
 ```
 
 ## Detailed stages
@@ -50,7 +51,12 @@ DCFLens must not copy DeltaDCF's final reduction to plain values because that di
 
 The implemented normalizer preserves comparative periods and every selected input as an `EvidenceReference`. Missing or conflicting facts remain explicit rather than becoming zero.
 
-Concurrent requests for the same normalized ticker share one in-flight analysis within a process. SEC, deterministic, and completed-analysis caches are separate so a transient Gemini failure cannot poison or hide deterministic results.
+Concurrent requests for the same normalized ticker share one in-flight analysis
+within a process. SEC, deterministic, completed-analysis, and quote caches are
+separate so a transient Gemini or quote failure cannot poison a validated core.
+After the daily boundary, a stale durable core is served immediately while filing
+metadata is checked in the background. An unchanged accession advances the next
+check without spending Gemini tokens.
 
 ### 5. Deterministic assumptions and valuation
 

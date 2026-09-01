@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import EvidenceDrawer from './EvidenceDrawer.jsx'
 
 /* ── One drawer, one screen ───────────────────────────────────────────────────

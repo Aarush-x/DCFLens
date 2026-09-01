@@ -19,7 +19,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { analyze, RETRY_AFTER_MS, TIMEOUT_MS } from './useAnalysis.js'
+import { analyze, marketContext, RETRY_AFTER_MS, TIMEOUT_MS } from './useAnalysis.js'
 import { REFUSAL_STATUS } from './failure.js'
 
 /** A fetch stub that answers a scripted list of outcomes, one per call, and
@@ -89,6 +89,35 @@ describe('a request that succeeds', () => {
     const calls = stubFetch(responds(200, {}))
     await run('BRK.B')
     expect(calls[0].url).toBe('/api/analyze/BRK.B')
+  })
+})
+
+describe('the independent market context', () => {
+  it('requests only the lightweight market endpoint', async () => {
+    const body = {
+      ticker: 'AAPL',
+      market_price: { status: 'AVAILABLE', quote: { price: 181 } },
+      plausibility: { level: 'SOUND' },
+    }
+    const calls = stubFetch(responds(200, body))
+
+    const result = await marketContext('AAPL', new AbortController().signal)
+
+    expect(result).toEqual(body)
+    expect(calls[0].url).toBe('/api/market-context/AAPL')
+  })
+
+  it('cancels a quote refresh when the analysis screen is left', async () => {
+    const controller = new AbortController()
+    const calls = stubFetch(hangs())
+    const settled = outcome(marketContext('AAPL', controller.signal))
+
+    await vi.advanceTimersByTimeAsync(10)
+    controller.abort()
+
+    const { error } = await settled
+    expect(calls[0].signal.aborted).toBe(true)
+    expect(error.name).toBe('Cancelled')
   })
 })
 

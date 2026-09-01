@@ -31,6 +31,39 @@ def test_development_defaults_are_safe() -> None:
     assert settings.market_quote_cache_max_entries == 128
     # Unset means the provider keeps its own verified browser identity.
     assert settings.market_quote_user_agent is None
+    assert settings.database_url is None
+    assert settings.analysis_pipeline_version == "v1"
+    assert settings.analysis_refresh_hour_utc == 23
+    assert settings.database_connect_timeout_seconds == 5
+
+
+def test_durable_cache_settings_accept_provider_neutral_postgres_urls() -> None:
+    settings = Settings.from_env(
+        {
+            "DATABASE_URL": "postgresql://user:secret@db.example.test/dcflens?sslmode=require",
+            "ANALYSIS_PIPELINE_VERSION": "annual-report-v2",
+            "ANALYSIS_REFRESH_HOUR_UTC": "22",
+            "DATABASE_CONNECT_TIMEOUT_SECONDS": "7",
+        }
+    )
+
+    assert settings.database_url.startswith("postgresql://")
+    assert settings.analysis_pipeline_version == "annual-report-v2"
+    assert settings.analysis_refresh_hour_utc == 22
+    assert settings.database_connect_timeout_seconds == 7
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("DATABASE_URL", "https://example.test/not-postgres"),
+        ("ANALYSIS_PIPELINE_VERSION", "spaces are unsafe"),
+        ("ANALYSIS_REFRESH_HOUR_UTC", "24"),
+    ],
+)
+def test_invalid_durable_cache_settings_fail_at_startup(name: str, value: str) -> None:
+    with pytest.raises(RuntimeError):
+        Settings.from_env({name: value})
 
 
 @pytest.mark.parametrize("name,values", [

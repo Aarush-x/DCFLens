@@ -16,6 +16,16 @@ services:
         value: "900"
       - key: CACHE_MAX_ENTRIES
         value: "16"
+      # Use a free serverless Postgres database such as Neon for durable
+      # validated analysis snapshots. The API remains memory-only when unset.
+      - key: DATABASE_URL
+        sync: false
+      - key: ANALYSIS_PIPELINE_VERSION
+        value: v1
+      - key: ANALYSIS_REFRESH_HOUR_UTC
+        value: "23"
+      - key: DATABASE_CONNECT_TIMEOUT_SECONDS
+        value: "5"
       - key: SEC_TIMEOUT_SECONDS
         value: "15"
       - key: SEC_MAX_RETRIES

@@ -17,6 +17,7 @@ LOCAL_CORS_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
 VALID_APP_ENVIRONMENTS = {"development", "test", "production"}
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 VERCEL_SLUG_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+PIPELINE_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 TRUE_SPELLINGS = {"1", "true", "yes", "on"}
 FALSE_SPELLINGS = {"0", "false", "no", "off"}
 MAX_USER_AGENT_LENGTH = 256
@@ -187,6 +188,10 @@ class Settings:
     market_quote_cache_max_entries: int
     market_quote_user_agent: str | None
     alphavantage_api_key: str | None
+    database_url: str | None
+    analysis_pipeline_version: str
+    analysis_refresh_hour_utc: int
+    database_connect_timeout_seconds: int
 
     @property
     def is_production(self) -> bool:
@@ -251,6 +256,20 @@ class Settings:
         gemini_model = _clean(environment.get("GEMINI_MODEL") or "gemini-3.5-flash")
         if not MODEL_PATTERN.fullmatch(gemini_model):
             raise RuntimeError("GEMINI_MODEL must be a safe gemini-* identifier")
+        pipeline_version = _clean(
+            environment.get("ANALYSIS_PIPELINE_VERSION") or "v1"
+        )
+        if not PIPELINE_VERSION_PATTERN.fullmatch(pipeline_version):
+            raise RuntimeError(
+                "ANALYSIS_PIPELINE_VERSION must be 1-64 safe identifier characters"
+            )
+        database_url = _clean(environment.get("DATABASE_URL")) or None
+        if database_url:
+            parsed_database = urlsplit(database_url)
+            if parsed_database.scheme not in {"postgres", "postgresql"}:
+                raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL")
+            if not parsed_database.hostname or not parsed_database.path.strip("/"):
+                raise RuntimeError("DATABASE_URL must include a host and database name")
 
         return cls(
             app_env=app_env,
@@ -319,6 +338,18 @@ class Settings:
             # name plus a key, because a name without a key is a broken config
             # that only fails at the first request.
             alphavantage_api_key=_clean(environment.get("ALPHAVANTAGE_API_KEY")) or None,
+            database_url=database_url,
+            analysis_pipeline_version=pipeline_version,
+            analysis_refresh_hour_utc=_bounded_nonnegative_int(
+                "ANALYSIS_REFRESH_HOUR_UTC", 23, environment, maximum=23
+            ),
+            database_connect_timeout_seconds=_bounded_int(
+                "DATABASE_CONNECT_TIMEOUT_SECONDS",
+                5,
+                environment,
+                minimum=1,
+                maximum=30,
+            ),
         )
 
 

@@ -12,7 +12,8 @@ Vercel: apps/web (Next.js)
     v
 Render: apps/api (Docker web service)
     |-- SEC EDGAR
-    `-- Google Gemini
+    |-- Google Gemini
+    `-- PostgreSQL analysis snapshots (optional)
 ```
 
 The Vercel and Render projects remain separately deployable. `render.yaml` lives at the repository root. Render builds `apps/api/Dockerfile` with the repository root as Docker context. Vercel uses `apps/web` as its Root Directory.
@@ -53,6 +54,10 @@ The service implements `APP_ENV`, `LOG_LEVEL`, `PORT`, `SEC_IDENTITY`, `SEC_TIME
 | `CORS_ALLOWED_ORIGINS` | Server | Required exact comma-separated origins. Wildcard rejected. |
 | `CORS_VERCEL_PREVIEW_PROJECT` / `CORS_VERCEL_PREVIEW_TEAM` | Server | Optional paired slugs used to derive one anchored project/team preview-origin regex. |
 | `CACHE_TTL_SECONDS` / `CACHE_MAX_ENTRIES` | Server | Bound each process-local cache. |
+| `DATABASE_URL` | Secret | Optional PostgreSQL URL for durable price-free analysis snapshots. |
+| `ANALYSIS_PIPELINE_VERSION` | Server | Version cache compatibility when prompts, parsers, formulas, or schemas change. |
+| `ANALYSIS_REFRESH_HOUR_UTC` | Server | Daily filing-accession check boundary, default `23`. |
+| `DATABASE_CONNECT_TIMEOUT_SECONDS` | Server | Bound durable-cache connection attempts, default `5`. |
 | `SEC_TIMEOUT_SECONDS` / `SEC_MAX_RETRIES` | Server | Bound SEC latency and retry attempts. |
 | `EXTERNAL_REQUEST_TIMEOUT_SECONDS` | Server | Positive bounded integer. |
 | `MAX_REPORT_BYTES` | Server | Positive bounded integer. |
@@ -72,7 +77,11 @@ Preview deployments require a CORS decision. The safest default is to permit onl
 
 `GET /health` returns a small stable body such as `{"status":"ok"}` and must not call SEC, Gemini, a database, or object storage. It proves that the process can serve HTTP.
 
-The prototype uses bounded in-memory caches and per-process duplicate suppression. Render restarts clear them, multiple instances do not share them, and the local filesystem remains unused because it is ephemeral. A future Redis adapter can implement the cache protocol without entering the valuation domain.
+The API keeps bounded in-memory caches and per-process duplicate suppression as
+its L1. When `DATABASE_URL` is configured, validated price-free analyses are
+also stored as JSONB and survive Render restarts and scale-to-zero. Database
+failures degrade to L1 rather than breaking analysis. The local filesystem
+remains unused because it is ephemeral. See [caching.md](caching.md).
 
 A future `GET /ready` may verify local configuration and required internal connections. External provider outages should appear in analysis errors and observability, not make every instance fail liveness.
 

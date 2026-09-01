@@ -18,6 +18,12 @@ import { useEffect, useState } from 'react'
 
 import { toView } from './adapter.js'
 import { failureFor, noResponse, REFUSAL_STATUS } from './failure.js'
+import {
+  mergeMarketContext,
+  persistAnalysis,
+  readPersistedAnalysis,
+  stripMarketContext,
+} from './analysisCache.js'
 
 /* Lazy glob, so a mock that is not committed is simply absent rather than a
    build error. */
@@ -76,6 +82,7 @@ export const TIMEOUT_MS = 90_000
    still binding its port has moved on, short enough that a judge does not notice
    it. See RETRY_STATUS below for what is retried, and what deliberately is not. */
 export const RETRY_AFTER_MS = 1_200
+export const MARKET_REFRESH_MS = 60_000
 
 /* Not a failure state — it means the effect that started this run was cleaned up
    (the ticker changed, or the screen went away). Nothing should be rendered for
@@ -211,6 +218,35 @@ export async function analyze(ticker, signal) {
   }
 }
 
+/** Refresh only the quote and calculations that depend on that quote. */
+export async function marketContext(ticker, signal) {
+  if (signal.aborted) throw new Cancelled()
+  const controller = new AbortController()
+  const relay = () => controller.abort()
+  signal.addEventListener('abort', relay, { once: true })
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const response = await fetch(`/api/market-context/${encodeURIComponent(ticker)}`, {
+      signal: controller.signal,
+      headers: { accept: 'application/json' },
+    })
+    let body = null
+    try {
+      body = await response.json()
+    } catch {
+      throw noResponse('network')
+    }
+    if (!response.ok) throw classify(response.status, body)
+    return body
+  } catch (error) {
+    if (signal.aborted) throw new Cancelled()
+    throw error
+  } finally {
+    clearTimeout(timer)
+    signal.removeEventListener('abort', relay)
+  }
+}
+
 /* The seam (1A.2). msft-live.json is a raw AnalysisEnvelope; aapl.json and
    xyz-novalue.json are already in docs/API.md v2 shape. Anything envelope-shaped —
    or an error body — goes through toView, so no component ever sees the raw
@@ -233,13 +269,68 @@ export function useAnalysis(ticker) {
        each one still waiting out its ninety seconds after nobody wanted it. */
     const run = new AbortController()
     const params = readParams()
+    let coreEnvelope = null
+    let pollTimer = null
+
+    const withAiStatus = (data) => ({
+      ...data,
+      aiStatus: params.status || data.aiStatus || 'OK',
+    })
+
+    const showEnvelope = (envelope) => {
+      if (run.signal.aborted) return
+      setState({ data: withAiStatus(toView(envelope)), loading: false, error: null })
+    }
+
+    const scheduleMarketRefresh = () => {
+      clearTimeout(pollTimer)
+      if (run.signal.aborted || !ticker || params.mockExplicit) return
+      pollTimer = setTimeout(refreshMarket, MARKET_REFRESH_MS)
+    }
+
+    async function refreshMarket() {
+      if (run.signal.aborted) return
+      if (document.visibilityState === 'hidden') {
+        scheduleMarketRefresh()
+        return
+      }
+      try {
+        const market = await marketContext(ticker, run.signal)
+        const envelope = mergeMarketContext(coreEnvelope, market)
+        if (envelope) showEnvelope(envelope)
+      } catch (error) {
+        if (error instanceof Cancelled || run.signal.aborted) return
+        // A quote refresh never erases a valid filing analysis or its last quote.
+      } finally {
+        scheduleMarketRefresh()
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        clearTimeout(pollTimer)
+        refreshMarket()
+      }
+    }
 
     async function load() {
       setState({ data: null, loading: true, error: null })
+      let restored = false
       try {
         let data
         if (ticker && !params.mockExplicit) {
-          data = toView(await analyze(ticker, run.signal))
+          const persisted = await readPersistedAnalysis(ticker)
+          if (persisted && !run.signal.aborted) {
+            coreEnvelope = persisted
+            restored = true
+            showEnvelope(persisted)
+          }
+
+          const envelope = await analyze(ticker, run.signal)
+          coreEnvelope = stripMarketContext(envelope)
+          persistAnalysis(ticker, envelope)
+          data = toView(envelope)
+          scheduleMarketRefresh()
         } else {
           data = asView(await loadMock(params.mock))
         }
@@ -254,12 +345,23 @@ export function useAnalysis(ticker) {
            showing is right: the next run has already set it to loading, and a
            cancellation is not something that happened to the user. */
         if (run.signal.aborted || err instanceof Cancelled) return
+        if (restored) {
+          scheduleMarketRefresh()
+          return
+        }
         setState({ data: null, loading: false, error: err })
       }
     }
 
+    if (ticker && !params.mockExplicit) {
+      document.addEventListener('visibilitychange', onVisibilityChange)
+    }
     load()
-    return () => run.abort()
+    return () => {
+      clearTimeout(pollTimer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      run.abort()
+    }
   }, [ticker])
 
   return state

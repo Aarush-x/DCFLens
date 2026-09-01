@@ -121,6 +121,14 @@ def create_app(config: Settings = settings) -> FastAPI:
     ) -> dict[str, Any]:
         return service.analyze(ticker).to_dict()
 
+    @application.get("/api/market-context/{ticker}")
+    def market_context(
+        ticker: str,
+        service: AnalysisService = Depends(get_analysis_service),
+    ) -> dict[str, Any]:
+        """Return the independently refreshed quote and price-relative checks."""
+        return service.market_context(ticker).to_dict()
+
     # Added last so CORS wraps request_context, including sanitized 500s.
     application.add_middleware(
         CORSMiddleware,
