@@ -3,9 +3,12 @@
  * there is no DOM renderer in this build.
  */
 
-import { describe, expect, it } from 'vitest'
+import React, { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
 
-import { reasonSentence } from './AiFallbackNotice.jsx'
+import AiFallbackNotice, { reasonSentence } from './AiFallbackNotice.jsx'
+import { AI_FALLBACK } from '../lib/adapter.js'
 
 /* Every reason the API can emit — apps/api/app/ai/gemini.py classifies provider
    failures into these, plus GeminiError's "provider_failure" default. */
@@ -62,5 +65,17 @@ describe('the reason sentence', () => {
 
   it('does not say LLM', () => {
     for (const r of [...REAL_REASONS, null]) expect(reasonSentence(r)).not.toMatch(/LLM/i)
+  })
+
+  it('keeps internal valuation jargon off the default screen', () => {
+    vi.stubGlobal('React', React)
+    try {
+      const html = renderToStaticMarkup(createElement(AiFallbackNotice, {
+        data: { aiStatus: AI_FALLBACK, aiFallbackReason: 'provider_failure' },
+      }))
+      expect(html).toContain('The estimate still works.')
+      expect(html).toContain('plain-English explanation')
+      expect(html).not.toMatch(/deterministic/i)
+    } finally { vi.unstubAllGlobals() }
   })
 })

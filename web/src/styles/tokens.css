@@ -51,11 +51,11 @@
      The floor is 11.5px and it is deliberate: the old 9.5–10px uppercase
      mono labels on --faint were the pairing DESIGN.md §3 already called
      "the hardest case", and they were unreadable on a real screen. */
-  --t-label:11.5px;
+  --t-label:12px;
   --t-meta:13px;
   --t-small:14px;
-  --t-body:15px;
-  --t-lead:17px;
+  --t-body:16px;
+  --t-lead:18px;
 
   /* colour */
   --ink:#000000;        /* page background */

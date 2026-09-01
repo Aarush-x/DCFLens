@@ -6,15 +6,35 @@
    scoping them keeps the app screen's other columns out of reach. Every value is
    a token — no hex ever appears here. */
 
-.plain-english .lbl { margin-bottom: 22px }
+.plain-english .reasoning-title {
+  margin: 0;
+  max-width: 24ch;
+  color: var(--cream);
+  font-family: var(--fd);
+  font-size: clamp(26px, 2.6vw, 34px);
+  font-weight: var(--dw);
+  letter-spacing: -.032em;
+  word-spacing: var(--dws);
+  line-height: 1.12;
+  text-wrap: balance;
+}
+.plain-english .reasoning-intro {
+  margin: 10px 0 34px;
+  max-width: 56ch;
+  color: var(--dim);
+  font-size: var(--t-body);
+  line-height: 1.65;
+  text-wrap: pretty;
+}
 
 .plain-english .pe { border-top: 1px solid var(--hair); padding: 24px 0 }
 .plain-english .pe:last-of-type { border-bottom: 1px solid var(--hair) }
 
 .plain-english .pe h3 {
-  font-family: var(--fd); font-size: 19px; font-weight: 600; letter-spacing: -.022em;
+  font-family: var(--fd); font-size: 21px; font-weight: 600; letter-spacing: -.024em;
   word-spacing: var(--dws);
-  margin: 0 0 10px; display: flex; align-items: center; gap: 11px;
+  margin: 0; display: flex; align-items: center; gap: 11px;
+  line-height: 1.3; text-wrap: pretty;
 }
 .plain-english .pip { width: 6px; height: 6px; border-radius: 50%; flex: none }
 .plain-english .pe p { margin: 0; font-size: var(--t-body); line-height: 1.65; color: var(--dim) }
@@ -27,13 +47,13 @@
 /* A block heading is structure, not a tertiary label — it must outrank the claims
    it groups. It was on .lbl (--faint), the token DESIGN.md §3 flags as failing AA,
    and on black it vanished. Now --cream, larger, with air above it. */
-.plain-english .blk { margin-bottom: 44px }
+.plain-english .blk { margin-bottom: 48px }
 .plain-english .blk > .blkh {
-  display: block; margin: 0 0 7px; font-family: var(--m); font-size: var(--t-label);
+  display: block; margin: 0 0 8px; font-family: var(--m); font-size: var(--t-meta);
   font-weight: 500; letter-spacing: .15em; text-transform: uppercase; color: var(--cream);
 }
 .plain-english .blk .hint {
-  margin: 0 0 6px; font-size: var(--t-small); line-height: 1.6; color: var(--dim); max-width: 54ch;
+  margin: 0 0 8px; font-size: var(--t-body); line-height: 1.6; color: var(--dim); max-width: 54ch;
 }
 /* Also used bare on the cannot-value column, which has no blocks. */
 .plain-english .empty {

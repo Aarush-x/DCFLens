@@ -4,9 +4,6 @@ import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { money, percent, count, EMPTY } from '../lib/format.js'
 import ViewEvidence from './ViewEvidence.jsx'
-import EvidenceAudit from './EvidenceAudit.jsx'
-import TerminalValueShare from './TerminalValueShare.jsx'
-import SensitivityMatrix from './SensitivityMatrix.jsx'
 import './WhyDrawer.css'
 
 /* "Why? Show me the math" — the second layer, ported from the `.why` / `.whybody` /
@@ -98,14 +95,8 @@ function rowsFor(math) {
  * @param {object|null} props.math    `the_math` from the adapter. Null on the
  *                                    cannot-value payload — there is no maths to
  *                                    show, so the trigger does not appear at all.
- * @param {Array}       props.checks  `checks` from the adapter, for the audit
- *                                    section. Empty on the cannot-value payload.
- * @param {number|null} props.price   today's share price, passed through to the
- *                                    matrix — the only block in here that compares
- *                                    a figure against it. Null is the live state,
- *                                    not an oversight; see adapter.js NO_PRICE.
  */
-export default function WhyDrawer({ math, checks, price = null }) {
+export default function WhyDrawer({ math }) {
   const [open, setOpen] = useState(false) // collapsed by default
   const body = useRef(null)
   const chevron = useRef(null)
@@ -157,8 +148,7 @@ export default function WhyDrawer({ math, checks, price = null }) {
         <span className="whylabel">
           <span className="whytitle">Why? Show me the math</span>
           <span className="whysub">
-            The seven numbers behind the range, what we checked, and how much the
-            answer moves when the assumptions do.
+            The seven inputs behind the estimate and where each value comes from.
           </span>
         </span>
         {/* A ring rather than a bare glyph: the chevron alone gave no target and
@@ -173,13 +163,7 @@ export default function WhyDrawer({ math, checks, price = null }) {
 
       <div className="whybody" id="why-body" ref={body}>
         <div className="whyinner">
-          {/* Two columns at desktop width. The drawer spans the page now, and a
-              single column of k/v rows across 1100px would strand every figure a
-              screen-width from its label. The inputs and their reading go left,
-              the checklist right — they are the two lists, and they are read
-              independently. Collapses to one column under 901px. */}
-          <div className="whygrid">
-            <div className="whycol">
+          <div className="whyinputs">
               {/* The rows carried no heading when they were the first thing in the
                   drawer. Beside a headed column they need one, and it is the same
                   .blkh treatment the four narrative blocks and the audit use. */}
@@ -204,28 +188,7 @@ export default function WhyDrawer({ math, checks, price = null }) {
                   <span className={row.value === EMPTY ? 'v missing' : 'v'}>{row.value}</span>
                 </div>
               ))}
-
-              {/* The rows above are the inputs; this is what the inputs produced, and
-                  how much of it rests on the one assumption none of them show. It sits
-                  under them because it is a reading of the maths, not another input. */}
-              <TerminalValueShare math={math} />
-            </div>
-
-            {/* The checklist, item by item — sentences about the business, where
-                the column beside it is figures. Renders nothing when the payload
-                carries no checks, and the grid closes up around it. */}
-            <div className="whycol">
-              <EvidenceAudit checks={checks} />
-            </div>
           </div>
-
-          {/* Last, full width, and deliberately: it is the densest block in the
-              product, it only means anything once the rows above have said what the
-              assumptions are, and it is the one thing here that actually wanted the
-              page's full width — it was scrolling sideways inside the narrative
-              column before this drawer moved out of it. Non-negotiable #1 is why it
-              lives behind this drawer and nowhere near the default screen. */}
-          <SensitivityMatrix math={math} price={price} />
         </div>
       </div>
     </div>

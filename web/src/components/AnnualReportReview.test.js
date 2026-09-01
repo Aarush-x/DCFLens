@@ -29,7 +29,13 @@ describe('annual-report integration', () => {
 
   it('does not invent findings for an older API response', () => {
     expect(toView(live).annualReport).toBe(null)
-    expect(render(null)).toContain('does not include the annual-report review')
+    expect(render(null)).toContain('Findings are interpretations, not independently verified facts.')
+  })
+
+  it('uses a provider-neutral interpretation disclaimer', () => {
+    const html = render(fixture())
+    expect(html).toContain('Findings are interpretations, not independently verified facts.')
+    expect(html).not.toContain('Gemini')
   })
 
   it('renders four topics, interpretation labels, exact excerpts and provenance', () => {

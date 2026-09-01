@@ -16,12 +16,9 @@ import './AiFallbackNotice.css'
  * of them. A beginner must come away thinking "there is less to read here", not
  * "this number is shaky".
  *
- * So: the framing is the deployed site's — "The deterministic valuation is
- * preserved." — an assertion about what survived, not an apology. There is no
- * warning triangle and no error vocabulary.
- *
- * "Deterministic" is jargon, and non-negotiable #1 does not let jargon stand
- * unglossed. The heading is fixed, so the first line of the body is the gloss.
+ * The default screen avoids the internal word “deterministic.” It says what
+ * survived and why in ordinary language. There is no warning triangle and no
+ * error vocabulary.
  *
  * The eyebrow says "Written analysis unavailable", not the deployed site's "AI
  * analysis unavailable". On a screen whose whole job is one analysis, the second
@@ -95,18 +92,18 @@ export default function AiFallbackNotice({ data }) {
       <Label as="p" className="ai-fallback__eyebrow">Written analysis unavailable</Label>
 
       <h3 id="ai-fallback-title" className="ai-fallback__head">
-        The deterministic valuation is preserved.
+        The estimate still works.
       </h3>
 
       <p className="ai-fallback__body">
-        Deterministic means the numbers come straight from the filings, by the same
-        fixed method every time. The estimate, the range and the checks were all
-        produced that way, and none of them is affected.
+        The numbers come straight from the company&rsquo;s filings and were calculated
+        the same way as every other company. The estimate, range and checks are all
+        still available.
       </p>
 
       <p className="ai-fallback__body">
-        What is missing is the written interpretation &mdash; the step that turns
-        those figures into sentences. There is less to read here, not less to trust.
+        What is missing is the plain-English explanation that turns those figures
+        into a simple story. You can still inspect the numbers and sources below.
       </p>
 
       <p className="ai-fallback__why">{reasonSentence(data.aiFallbackReason)}</p>

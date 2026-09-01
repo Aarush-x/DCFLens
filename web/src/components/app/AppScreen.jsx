@@ -7,6 +7,7 @@ import RangeBar from '../RangeBar.jsx'
 import PlainEnglish from '../PlainEnglish.jsx'
 import AiFallbackNotice from '../AiFallbackNotice.jsx'
 import WhyDrawer from '../WhyDrawer.jsx'
+import DeepDive from '../DeepDive.jsx'
 import EvidenceProvider from '../EvidenceProvider.jsx'
 import TheNumbers from '../TheNumbers.jsx'
 import SourceRecord from '../SourceRecord.jsx'
@@ -248,7 +249,9 @@ function Analysis({ data }) {
           <TheNumbers data={data} />
         </div>
 
-        {/* The second layer. The ONLY place jargon is allowed, and only glossed.
+        {/* The second layer is split by purpose. “Show me the math” contains only
+            the model inputs and their sources. “Dig deeper” separately contains
+            the checklist, long-term-value dependence and sensitivity analysis.
 
             It sits BELOW the two panes and spans both, rather than inside the
             left one. Two reasons, and the second is why it moved on 2026-08-31:
@@ -261,7 +264,8 @@ function Analysis({ data }) {
                500px one, so the trigger sat alone with a void to its right. The
                reported "empty space when collapsed" was that void. Full width,
                the trigger closes the argument instead of trailing off it. */}
-        <WhyDrawer math={data.the_math} checks={data.checks} price={data.price?.current ?? null} />
+        <WhyDrawer math={data.the_math} />
+        <DeepDive math={data.the_math} checks={data.checks} price={data.price?.current ?? null} />
 
         {/* The proof of work, under the argument it backs: the exact document every
             figure came from, by accession number, with a link to it. It sits above

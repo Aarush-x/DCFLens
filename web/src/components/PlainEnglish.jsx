@@ -1,15 +1,13 @@
 import Label from './ui/Label.jsx'
-import { percent } from '../lib/format.js'
 import './PlainEnglish.css'
 
 /* The left pane's narrative column — the "Why we think so" block from the app
  * screen of design/index.html.
  *
- * ── Four blocks, not three flat cards ────────────────────────────────────────
- * design/index.html was regrouped on 2026-08-30 and this component is caught up
- * to it. The order is the argument, and it is the mockup's, not ours:
- *
- *   what must be true  ·  what supports  ·  what weakens  ·  what could prove it wrong
+ * ── One plain-English layer ──────────────────────────────────────────────────
+ * The default view only carries the case for, the case against, and what to
+ * monitor. Model assumptions and checklist language live in the disclosures
+ * below, so a reader never has to decode financial terms to understand the page.
  *
  * A block with nothing in it does not disappear — it renders the mockup's `.empty`
  * line and says so. An absent half of the case is the thing a reader most needs to
@@ -53,7 +51,6 @@ function Claim({ item }) {
         <span className="pip" style={{ background: pipColour(item.sentiment) }} />
         {item.title}
       </h3>
-      {item.body ? <p>{item.body}</p> : null}
     </article>
   )
 }
@@ -74,65 +71,7 @@ function Block({ heading, hint, items, empty }) {
 }
 
 /**
- * The first block — "What must be true for this to hold".
- *
- * The mockup's two cards there are growth assumptions ("Spare cash keeps growing
- * about 8% a year"), and that is what `the_math` carries, so they are built from
- * it. Every figure is read straight off the payload; the sentence around it is
- * the mockup's own wording with the number substituted in.
- *
- * These carry no evidence object, and never did. They are our assumptions, not
- * the filing's, and citing a document for a claim it does not make would be a
- * misattribution — which is one reason the screen no longer promises a source
- * under every card. `evidence: null` is still set explicitly, so the field reads
- * as a stated absence rather than an oversight.
- *
- * `what_has_to_be_true.summary` is NOT used here. It is a sentence about what
- * today's buyers are betting, which is what the mockup puts in the right column's
- * `.belnote` — and TheNumbers already renders it there. Putting it in both places
- * printed the same sentence twice on one screen.
- */
-function assumptionCards(data) {
-  const math = data?.the_math
-  if (!math) return []
-
-  const s1 = math.stage_1 ?? {}
-  const s2 = math.stage_2 ?? {}
-  const hist = data?.what_has_to_be_true?.historical_growth_pct
-  const out = []
-
-  if (Number.isFinite(s1.growth_pct)) {
-    const horizon = Number.isFinite(s1.years) ? `For the next ${s1.years} years.` : 'At first.'
-    /* Only drawn when we have both halves — "faster than" needs something to be
-       faster than, and the historical rate is null whenever the filed cash-flow
-       series crosses zero (see historicalGrowthPct in adapter.js). */
-    const against = Number.isFinite(hist)
-      ? ` That is ${s1.growth_pct > hist ? 'faster' : 'slower'} than the ${percent(hist)} it has managed lately, so the estimate is already assuming things ${s1.growth_pct > hist ? 'improve' : 'ease off'}.`
-      : ''
-    out.push({
-      title: `Spare cash keeps growing about ${percent(s1.growth_pct)} a year`,
-      body: `${horizon}${against}`,
-      sentiment: 'neutral',
-      evidence: null,
-    })
-  }
-
-  if (Number.isFinite(s2.growth_pct)) {
-    out.push({
-      title: `Then it slows to about ${percent(s2.growth_pct)} a year`,
-      body: Number.isFinite(s2.years)
-        ? `For the ${s2.years} years after that. Slower, because no company grows fast forever.`
-        : 'Slower, because no company grows fast forever.',
-      sentiment: 'neutral',
-      evidence: null,
-    })
-  }
-
-  return out
-}
-
-/**
- * Turn the adapter's flat `plain_english[]` into the mockup's four blocks.
+ * Turn the adapter's flat `plain_english[]` into three reader-facing blocks.
  *
  * Nothing is rewritten on the way through — a card keeps its own title, body and
  * evidence, and only its position changes.
@@ -158,7 +97,6 @@ function partition(items, data) {
     }))
 
   return {
-    mustBeTrue: assumptionCards(data),
     supports: bySentiment('positive'),
     weakens: bySentiment('negative'),
     proveWrong: [...falsifiers, ...bySentiment('neutral')],
@@ -184,7 +122,7 @@ function partition(items, data) {
  * @param {object} props
  * @param {Array}  props.items  `plain_english[]` from the adapter.
  * @param {object} props.data   the whole view object — the first and fourth blocks
- *                              read `what_has_to_be_true` and `falsifiers`, which
+ *                              reads `falsifiers`, which
  *                              do not live on `plain_english`.
  */
 export default function PlainEnglish({ items, data }) {
@@ -209,35 +147,31 @@ export default function PlainEnglish({ items, data }) {
     )
   }
 
-  const { mustBeTrue, supports, weakens, proveWrong } = partition(items, data)
+  const { supports, weakens, proveWrong } = partition(items, data)
 
   return (
     <section className="plain-english">
-      <Label>Why we think so</Label>
-
+      <h2 className="reasoning-title">Why we think so</h2>
+      <p className="reasoning-intro">
+        Start with the simple case for and against this estimate. The financial detail is available below when you want it.
+      </p>
       <Block
-        heading="What must be true for this to hold"
-        hint="The estimate assumes all of these. If one fails, the number is wrong."
-        items={mustBeTrue}
-        empty="We haven’t written up what this estimate assumes."
-      />
-      <Block
-        heading="What supports the estimate"
-        hint="Things in the filings that make the estimate more believable."
+        heading="What makes us more confident"
+        hint="What the company’s record says is going well."
         items={supports}
-        empty="Nothing in the filings we read argues for this estimate."
+        empty="We did not find clear evidence that makes the estimate more convincing."
       />
       <Block
-        heading="What weakens the estimate"
-        hint="Things in the filings that cut the other way."
+        heading="What makes us less certain"
+        hint="What could make the estimate too optimistic."
         items={weakens}
-        empty="Nothing in the filings we read argues against this estimate."
+        empty="We did not find a clear warning in the information we reviewed."
       />
       <Block
-        heading="What could prove it wrong"
-        hint="Specific things to watch for. If you see one, come back and redo this."
+        heading="What to keep an eye on"
+        hint="Changes that would give us a reason to revisit the estimate."
         items={proveWrong}
-        empty="We haven’t written this part up. Nothing has been guessed to fill it."
+        empty="We do not have a specific warning to monitor yet."
       />
     </section>
   )

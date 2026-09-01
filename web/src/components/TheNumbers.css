@@ -60,19 +60,6 @@
 .scn .n { color: var(--dim) }
 .scn .v { font-family: var(--m); font-weight: 600 }
 
-/* "What has to be true" rows */
-.bel { display: flex; justify-content: space-between; padding: 10px 0; font-size: var(--t-body) }
-.bel .k { color: var(--dim) }
-.bel .v { font-family: var(--m); font-weight: 600 }
-.belnote {
-  font-size: var(--t-small);
-  color: var(--dim);
-  line-height: 1.6;
-  margin: 14px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--hair);
-}
-
 /* One quiet line where a figure would have been. Same weight as .belnote, but it
    sits under a value rather than after a list. Used for the price gap. */
 .numnote {

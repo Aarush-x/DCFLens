@@ -1,0 +1,80 @@
+.deep-dive {
+  margin-top: 14px;
+  border: 1px solid var(--hair);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.deep-dive > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 22px 24px;
+  color: var(--cream);
+  cursor: pointer;
+  list-style: none;
+  transition: background .2s, border-color .2s;
+}
+.deep-dive > summary::-webkit-details-marker { display: none }
+.deep-dive > summary:hover { background: var(--hoverbg) }
+.deep-dive > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
+.deep-label { display: block; min-width: 0 }
+.deep-title {
+  display: block;
+  font-family: var(--fd);
+  font-size: 19px;
+  font-weight: var(--dw);
+  letter-spacing: -.022em;
+  line-height: 1.25;
+}
+.deep-subtitle {
+  display: block;
+  max-width: 76ch;
+  margin-top: 6px;
+  color: var(--dim);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+.deep-chevron {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--hair2);
+  border-radius: 50%;
+  color: var(--dim);
+  transition: transform .2s, border-color .2s, color .2s;
+}
+.deep-dive[open] > summary { border-bottom: 1px solid var(--hair) }
+.deep-dive[open] .deep-chevron { transform: rotate(180deg); color: var(--cream) }
+
+.deep-body { padding: 30px 24px 28px }
+.deep-intro {
+  max-width: 74ch;
+  margin: 0 0 30px;
+  color: var(--dim);
+  font-size: var(--t-body);
+  line-height: 1.65;
+}
+.deep-value { max-width: 760px }
+.deep-value > .tvshare { margin-top: 0 }
+.deep-dive > .deep-body > .evidence-audit { margin-top: 52px }
+.deep-dive .evidence-audit .hint { max-width: 74ch }
+.deep-dive .evidence-audit .auditlist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 52px;
+}
+.deep-dive .evidence-audit .chk:nth-last-child(-n + 2) { border-bottom: none }
+
+@media (max-width: 900px) {
+  .deep-dive .evidence-audit .auditlist { grid-template-columns: 1fr }
+  .deep-dive .evidence-audit .chk:nth-last-child(2) { border-bottom: 1px solid var(--hair) }
+  .deep-body { padding: 26px 20px 24px }
+  .deep-dive > summary { padding: 20px; gap: 20px }
+}

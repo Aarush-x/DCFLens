@@ -82,19 +82,13 @@
 .whydrawer .why[aria-expanded="false"] + .whybody { border-color: transparent }
 .whydrawer .whyinner { padding: 30px 24px 28px }
 
-/* Two columns: the figures and their reading on the left, the checklist on the
-   right. One column below 901px, matching .panes' own breakpoint — this drawer
-   is now as wide as .panes and breaks where it does. */
-.whydrawer .whygrid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 52px; align-items: start }
+/* Inputs stay deliberately narrow. This disclosure answers one question, so the
+   values should not stretch across the full-width panel. */
+.whydrawer .whyinputs { max-width: 760px }
 @media (max-width: 900px) {
-  .whydrawer .whygrid { grid-template-columns: 1fr; gap: 40px }
   .whydrawer .whyinner { padding: 26px 20px 24px }
 }
-.whydrawer .whycol { min-width: 0 }
-
-/* Column headings, borrowed from .plain-english .blk — the drawer's two lists
-   are headed the same way the four narrative blocks are, because they are the
-   same kind of thing one layer down. --cream, not the .lbl default: D-021. */
+/* Heading treatment shared with the narrative blocks. */
 .whydrawer .blkh {
   display: block; margin: 0 0 7px;
   font-family: var(--m); font-size: var(--t-label);
@@ -105,10 +99,6 @@
   margin: 0 0 10px;
   font-size: var(--t-small); line-height: 1.6; color: var(--dim); max-width: 54ch;
 }
-
-/* The audit already heads itself, and its 34px top margin was spacing it off the
-   maths rows it used to follow. It leads its own column now. */
-.whydrawer .whycol > .evidence-audit { margin-top: 0 }
 
 .whydrawer .mathrow {
   display: flex; justify-content: space-between; gap: 24px; padding: 15px 0;

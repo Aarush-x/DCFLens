@@ -1,13 +1,6 @@
 import Eyebrow from './ui/Eyebrow.jsx'
 import './AnnualReportReview.css'
 
-const STATUS_COPY = {
-  REVIEWED: 'Gemini reviewed selected passages. Findings are interpretations, not independently verified facts.',
-  NO_FINDINGS: 'Passages were supplied, but Gemini returned no supported findings. This is not a clean bill of health.',
-  UNAVAILABLE: 'Usable annual-report passages were unavailable. The financial valuation remains separate.',
-  AI_UNAVAILABLE: 'The AI review was unavailable. Any extracted passages below are source material, not AI conclusions.',
-}
-
 function gapFor(topic, status) {
   if (topic.coverage === 'PARTIAL_REFERENCE') return 'The filing refers to other documents. Governance coverage is incomplete.'
   if (status === 'AI_UNAVAILABLE') return 'No AI conclusion is available for this topic.'
@@ -20,8 +13,7 @@ export default function AnnualReportReview({ report }) {
     <section className="annual-review av" aria-labelledby="annual-review-heading">
       <Eyebrow>Annual-report review</Eyebrow>
       <h2 id="annual-review-heading">What management says. What to question.</h2>
-      <p className="annual-intro">{report ? STATUS_COPY[report.status]
-        : 'This analysis does not include the annual-report review. No narrative findings have been assumed.'}</p>
+      <p className="annual-intro">Findings are interpretations, not independently verified facts.</p>
       {report && <>
         <div className="annual-topics">
           {report.topics.map((topic) => (
