@@ -4,6 +4,7 @@ import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { money, percent, count, EMPTY } from '../lib/format.js'
 import ViewEvidence from './ViewEvidence.jsx'
+import GrowthWorking from './GrowthWorking.jsx'
 import './WhyDrawer.css'
 
 /* "Why? Show me the math" — the second layer, ported from the `.why` / `.whybody` /
@@ -35,7 +36,9 @@ function stageLabel(from, years) {
  * docs/API.md defines as keyed by field name with an absent key meaning null. The
  * two growth stages have no key of their own — they are OUR assumptions, not
  * reported figures, and there is no filing to point at for them, so they carry no
- * trigger rather than a trigger that leads nowhere.
+ * trigger rather than a trigger that leads nowhere. What they get instead is
+ * GrowthWorking below: not a source, which does not exist, but the method, which
+ * does.
  */
 function rowsFor(math) {
   const s1 = math.stage_1 ?? {}
@@ -148,7 +151,8 @@ export default function WhyDrawer({ math }) {
         <span className="whylabel">
           <span className="whytitle">Why? Show me the math</span>
           <span className="whysub">
-            The seven inputs behind the estimate and where each value comes from.
+            The seven inputs behind the estimate, where each value came from, and how
+            the growth rate was arrived at.
           </span>
         </span>
         {/* A ring rather than a bare glyph: the chevron alone gave no target and
@@ -189,6 +193,12 @@ export default function WhyDrawer({ math }) {
                 </div>
               ))}
           </div>
+
+          {/* The two growth rows above are the only inputs on this screen that are
+              ours rather than the filing's, and they are the ones the answer is
+              most sensitive to. This is their working. Absent — as on any payload
+              without the engine's assumption traces — it renders nothing. */}
+          <GrowthWorking growth={math.growth} />
         </div>
       </div>
     </div>

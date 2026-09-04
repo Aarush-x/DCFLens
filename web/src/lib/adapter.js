@@ -633,6 +633,239 @@ function toSensitivity(fv) {
   }
 }
 
+/* ── where the growth rate comes from ───────────────────────────────────────── */
+
+/* `the_math.growth` — the working behind the three growth rates.
+ *
+ * The drawer's seven input rows print growth as a finished figure, and two of them
+ * carry no "Source" trigger at all, for the reason recorded above `mathEvidence`:
+ * growth is not a filed number. No company reports how fast it will grow. That is
+ * true, and it is also the whole problem — a beginner reading "Growth, years 1–5:
+ * 14.2%" has no way to tell an estimate with a method behind it from one somebody
+ * typed in. This block is the method.
+ *
+ * Everything here is read off `analysis.deterministic_baseline.traces`, which the
+ * engine writes for exactly this purpose (docs/adaptive-baseline.md §AssumptionTrace).
+ * Nothing is recomputed: the weights that applied, the value each signal
+ * contributed, the modifiers, the caps and the final rate are all recorded there.
+ *
+ * ── Three rules this block follows ────────────────────────────────────────────
+ *
+ * 1. NOT the trace's own `plain_english_explanation`. It passes readsAsEnglish, so
+ *    it would print — but it says "It blends the Technology prior with available FCF
+ *    and revenue growth, and applies a unknown maturity adjustment". "Prior", "FCF"
+ *    and "maturity adjustment" are three pieces of jargon in one sentence, the
+ *    article does not agree with "unknown", and it is a sentence about the engine
+ *    rather than about the company. The drawer's licence for jargon is a term named
+ *    once with a gloss beside it (non-negotiable #1), not a machine sentence pasted
+ *    in. So the numbers cross the seam and the copy is written in the component.
+ *
+ * 2. `normalized_weight`, never `target_weight`. The target is what the config asks
+ *    for (40% for cash-flow growth); the normalized weight is what actually applied
+ *    after unusable signals were dropped and the cash-flow signal was cut in
+ *    proportion to how steady the cash flow is. Printing the target would describe a
+ *    blend that did not happen. `downweighted` records the difference so the
+ *    component can say why the number is lower than the reader might expect.
+ *
+ * 3. The capped value, not the raw one. A signal outside its bound enters the blend
+ *    clipped — NVIDIA's 40.7% cash-flow growth is real but is capped at 60% before
+ *    weighting, and AAPL's is not capped at all. `bounds_applied[].output_value` is
+ *    what the engine used, so it is what we show; `capped_from_pct` carries the
+ *    uncapped figure only when the clip actually bit, because a cap that changed
+ *    nothing is not part of this company's story.
+ *
+ * Returns null whenever there is no stage-one trace to read — the contract fixture
+ * in src/mocks/aapl.json is one such payload, and the section simply does not
+ * render. An absent working is never filled in with a plausible one.
+ */
+
+/** The engine's signal names, in the order the blend should read. */
+const GROWTH_SIGNALS = [
+  ['sector_prior', 'sector'],
+  ['historical_fcf_growth', 'cash'],
+  ['revenue_growth', 'sales'],
+]
+
+const traceFor = (analysis, assumption) =>
+  arr(analysis?.deterministic_baseline?.traces).find((t) => t?.assumption === assumption) ?? null
+
+const boundNamed = (trace, name) =>
+  arr(trace?.bounds_applied).find((b) => str(b?.name) === name) ?? null
+
+const observationNamed = (trace, name) =>
+  arr(trace?.raw_observations).find((o) => str(o?.name) === name) ?? null
+
+const weightNamed = (trace, name) =>
+  arr(trace?.weights).find((w) => str(w?.signal) === name) ?? null
+
+/**
+ * How many years the engine's compound growth spanned, read off the calculation
+ * string it wrote: "CAGR = (98767000000.0 / 4735000000.0)^(1 / 18) - 1" -> 18.
+ *
+ * Parsing a machine string is not something this file does lightly, and the reason
+ * it is worth it here is that "grew 18.4% a year" is a different claim from "grew
+ * 18.4% a year over eighteen years" — a rate with no window behind it invites the
+ * reader to supply their own. The span is nowhere else in the envelope. The regex
+ * is deliberately exact rather than forgiving: anything that is not the shape the
+ * engine writes returns null, the sentence loses its clause, and no number is
+ * guessed. `readsAsEnglish` already keeps the string itself off the screen.
+ */
+function cagrYears(calculation) {
+  const match = /\^\(1 \/ (\d+)\) - 1$/.exec(str(calculation) ?? '')
+  const years = match ? Number(match[1]) : null
+  return Number.isInteger(years) && years >= 1 ? years : null
+}
+
+/** One ingredient of the stage-one blend, or null when the engine could not use it.
+ *  A signal it could not use is not silently dropped — `unusable` below states it. */
+function toIngredient(trace, prior, [signal, key]) {
+  const weight = weightNamed(trace, signal)
+  const share = toPct(weight?.normalized_weight)
+  if (share === null) return null
+
+  if (signal === 'sector_prior') {
+    return { key, value_pct: toPct(prior?.value), weight_pct: share, span_years: null,
+             downweighted: false, capped_from_pct: null }
+  }
+
+  const observation = observationNamed(trace, signal)
+  if (num(observation?.value) === null) return null
+
+  const cap = boundNamed(trace, `${signal}_cap`)
+  const applied = cap?.was_applied === true
+  return {
+    key,
+    value_pct: toPct(applied ? cap.output_value : observation.value),
+    weight_pct: share,
+    span_years: cagrYears(observation.calculation),
+    // The config asks for 40% of the blend and the engine gave it less, in
+    // proportion to how steady the cash flow has been.
+    downweighted: num(weight?.effective_weight) < num(weight?.target_weight),
+    capped_from_pct: applied ? toPct(cap.input_value) : null,
+  }
+}
+
+/** The signals the engine had to do without, with the reason it recorded. Read from
+ *  the observation's own status, so "we had no figure" and "the figure was there and
+ *  unusable" stay different things on screen. */
+function unusableSignals(trace) {
+  return GROWTH_SIGNALS.filter(([signal]) => signal !== 'sector_prior')
+    .map(([signal, key]) => {
+      const observation = observationNamed(trace, signal)
+      if (!observation || num(observation.value) !== null) return null
+      return { key, reason: str(observation.status) ?? 'missing' }
+    })
+    .filter(Boolean)
+}
+
+/** The engine's own word for the state a modifier is reacting to — "mature" out of
+ *  "mature company based on years_public=42". Null when the rationale is not one of
+ *  the shapes the config can produce, and the component then falls back to copy that
+ *  names no state. The rationale itself never prints: it fails readsAsEnglish. */
+function modifierState(name, rationale) {
+  const text = str(rationale) ?? ''
+  if (name === 'company_maturity') return /^(emerging|established|mature)\b/.exec(text)?.[1] ?? null
+  if (name === 'fcf_state') return /state is ([a-z_]+)$/.exec(text)?.[1] ?? null
+  return null
+}
+
+/** Only the modifiers that moved the number. A zero-point adjustment is the engine
+ *  recording that it considered something and found nothing to change; listing it
+ *  would pad the working with three lines that all say "no change". */
+function toAdjustments(trace) {
+  return arr(trace?.company_modifiers)
+    .filter((m) => num(m?.value) !== null && m.value !== 0)
+    .map((m) => ({
+      key: str(m.name),
+      points: toPct(m.value),
+      state: modifierState(str(m.name), m.rationale),
+    }))
+}
+
+/** A bound, as something to say only when it bit. `input_pct` is the rate the blend
+ *  produced before the clip — the reader is owed the number that was refused. */
+function toCap(trace, name) {
+  const bound = boundNamed(trace, name)
+  if (!bound) return null
+  return {
+    lower_pct: toPct(bound.lower),
+    upper_pct: toPct(bound.upper),
+    applied: bound.was_applied === true,
+    input_pct: bound.was_applied === true ? toPct(bound.input_value) : null,
+  }
+}
+
+/** What the AI reviewer did to one rate, and the most it was allowed to do.
+ *
+ *  Null unless the review actually ran. The fallback path is NOT an empty
+ *  `adjustments` array — it emits a full set of zero-point entries carrying
+ *  "AI output was unavailable or invalid; deterministic baseline preserved."
+ *  (src/mocks/msft-live.json is one). Reading those as a decision would put "an AI
+ *  reviewer read the filing and left this alone" on screen for a call that never
+ *  reached the model, which is the one thing the AI-unavailable state exists to stop
+ *  the product claiming. The status is the only thing that separates them. */
+function toAiMove(analysis, assumption) {
+  if (str(analysis?.status) === 'DETERMINISTIC_FALLBACK') return null
+  const move = arr(analysis?.adjustments).find((x) => str(x?.assumption) === assumption)
+  if (!move || num(move.ai_adjustment) === null) return null
+  return {
+    points: toPct(move.ai_adjustment),
+    limit_points: toPct(Math.max(Math.abs(num(move.maximum_adjustment) ?? 0),
+                                 Math.abs(num(move.minimum_adjustment) ?? 0))),
+    // Shown only where it explains a change; see GrowthWorking.jsx.
+    rationale: str(move.rationale),
+  }
+}
+
+function toGrowth(fv, analysis) {
+  const stageOne = traceFor(analysis, 'stage_one_growth_rate')
+  if (!stageOne) return null
+
+  const stageTwo = traceFor(analysis, 'stage_two_growth_rate')
+  const terminal = traceFor(analysis, 'terminal_growth_rate')
+  const a = fv?.assumptions ?? {}
+  const classification = analysis?.deterministic_baseline?.classification
+
+  return {
+    // "Technology", "Consumer Retail" — the group whose typical rate we start from.
+    sector: str(classification?.sector_display_name),
+    stage_1: {
+      years: num(a.stage_one_years),
+      baseline_pct: toPct(stageOne.final_baseline),
+      // What the DCF actually used, which differs from the baseline exactly when the
+      // AI reviewer moved it. Read from the assumptions, never added up here.
+      final_pct: toPct(a.stage_one_growth_rate),
+      ingredients: GROWTH_SIGNALS
+        .map((pair) => toIngredient(stageOne, stageOne.sector_prior, pair))
+        .filter(Boolean),
+      unusable: unusableSignals(stageOne),
+      adjustments: toAdjustments(stageOne),
+      cap: toCap(stageOne, 'stage_one_sector_and_global_cap'),
+      ai: toAiMove(analysis, 'stage_one_growth_rate'),
+    },
+    stage_2: !stageTwo ? null : {
+      years: num(a.stage_two_years),
+      baseline_pct: toPct(stageTwo.final_baseline),
+      final_pct: toPct(a.stage_two_growth_rate),
+      // The fade fraction is the sector's, and it is the whole of stage two: the
+      // rate starts at the stage-one baseline and is pulled this far back toward the
+      // long-run rate. Both endpoints are the traces' own, not the AI-adjusted pair,
+      // because that is the arithmetic the engine performed.
+      keeps_pct: toPct(stageTwo.sector_prior?.value),
+      from_pct: toPct(stageOne.final_baseline),
+      to_pct: toPct(terminal?.final_baseline),
+      cap: toCap(stageTwo, 'stage_two_fade_and_global_cap'),
+      ai: toAiMove(analysis, 'stage_two_growth_rate'),
+    },
+    terminal: !terminal ? null : {
+      // No AI adjustment exists for the terminal rate — the backend does not offer
+      // one — so there is one figure here and no baseline/final pair.
+      final_pct: toPct(terminal.final_baseline),
+      cap: toCap(terminal, 'terminal_growth_global_cap'),
+    },
+  }
+}
+
 function toTheMath(fv, analysis, filing) {
   if (!fv) return null
   const inputs = fv.inputs ?? {}
@@ -655,6 +888,9 @@ function toTheMath(fv, analysis, filing) {
     discount_rate_pct: toPct(a.discount_rate),
     terminal_value_pct: toPct(fv.terminal_value?.concentration),
     terminal_value: toTerminalValue(fv),
+    // The working behind the three growth rows above. Null on any payload without
+    // the engine's assumption traces — see `toGrowth`.
+    growth: toGrowth(fv, analysis),
     net_debt: num(inputs.net_debt),
     shares_outstanding: num(inputs.diluted_shares),
     sensitivity: toSensitivity(fv),

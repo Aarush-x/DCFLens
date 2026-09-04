@@ -1,0 +1,144 @@
+/* GrowthWorking — the working behind the three growth rates, inside the Why drawer.
+ *
+ * No new visual language. The blend rows are `.mathrow`'s k/v split at the same two
+ * type sizes with the same gloss treatment; the heading is the `.blkh` the narrative
+ * blocks and the evidence audit already use; the weight bar is the mockup's
+ * track/band relationship from design/index.html (.track on var(--trackbg), the fill
+ * on var(--bandbg)), the same pairing TerminalValueShare draws. Every colour is a
+ * token.
+ *
+ * The one thing that is new is the stage head — a title and a rate on one line,
+ * hairline-separated. Three rates are being explained rather than one, and without a
+ * mark between them the section reads as a single long paragraph in which the reader
+ * loses which number is being justified. It is a rule and a size step, not a card:
+ * DESIGN.md's section boundaries are thin horizontal rules, not containers.
+ *
+ * Unlayered, like WhyDrawer.css / TerminalValueShare.css — a co-located sheet is its
+ * own PostCSS entry and carries no `@tailwind components` directive. */
+
+/* The same 760px the drawer's input rows keep. This section explains those rows and
+   belongs at their measure; across the full-width panel the rate would end up a hand
+   span from the label it belongs to. */
+.growthwork {
+  max-width: 760px;
+  margin-top: 34px; padding-top: 26px; border-top: 1px solid var(--hair);
+}
+
+/* Shared with the drawer's own heading and hint, repeated here rather than reached
+   for across component boundaries — this sheet is scoped to .growthwork. */
+.growthwork .blkh {
+  display: block; margin: 0 0 7px;
+  font-family: var(--m); font-size: var(--t-label);
+  font-weight: 500; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--cream);
+}
+.growthwork .hint {
+  margin: 0 0 4px;
+  font-size: var(--t-small); line-height: 1.6; color: var(--dim); max-width: 58ch;
+}
+
+/* ── one rate ───────────────────────────────────────────────────────────────── */
+
+.growthwork .gwstage { margin-top: 26px }
+
+.growthwork .gwhead {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 20px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--hair2);
+}
+.growthwork .gwtitle {
+  font-family: var(--fd); font-weight: var(--dw);
+  font-size: var(--t-lead); letter-spacing: -.018em; word-spacing: var(--dws);
+  color: var(--cream);
+}
+/* var(--m) with tabular figures — non-negotiable #6, numerals must not jitter. */
+.growthwork .gwrate {
+  font-family: var(--m); font-weight: 600; font-size: var(--t-body);
+  white-space: nowrap; color: var(--cream);
+}
+
+.growthwork .gwlead {
+  margin: 12px 0 0;
+  font-size: var(--t-small); line-height: 1.65; color: var(--dim); max-width: 62ch;
+}
+
+/* ── the blend ──────────────────────────────────────────────────────────────── */
+
+.growthwork .gwblend { margin-top: 14px }
+
+.growthwork .gwrow {
+  display: flex; justify-content: space-between; gap: 28px;
+  padding: 14px 0; border-bottom: 1px solid var(--hair);
+  font-size: var(--t-body);
+}
+.growthwork .gwrow:first-child { border-top: 1px solid var(--hair) }
+.growthwork .gwrow .k { color: var(--cream); font-weight: 500; min-width: 0 }
+.growthwork .gwrow .k em {
+  display: block; font-style: normal; font-weight: 400; font-size: var(--t-small);
+  color: var(--dim); margin-top: 4px; max-width: 50ch; line-height: 1.55;
+}
+/* A cap that bit is a second remark about the same row, not a continuation of the
+   first, so it takes the quieter colour and its own line. */
+.growthwork .gwrow .k em.capnote { color: var(--faint); margin-top: 6px }
+
+/* The value column carries three things about one signal — the rate, the share of
+   the blend drawn, and the share as a figure — so it is a stack, right-aligned, and
+   fixed-width enough that three rows' bars start at the same x. */
+.growthwork .gwrow .v {
+  flex: none; width: 152px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 7px;
+}
+.growthwork .gwrow .v b {
+  font-family: var(--m); font-weight: 600; white-space: nowrap; color: var(--cream);
+}
+.growthwork .gwrow .v small {
+  font-family: var(--m); font-size: var(--t-label); color: var(--faint);
+  white-space: nowrap;
+}
+.growthwork .gwbar {
+  display: block; width: 100%; height: 4px; border-radius: 2px;
+  background: var(--trackbg); overflow: hidden;
+}
+.growthwork .gwbar i { display: block; height: 100%; background: var(--bandbg) }
+
+/* A signal the engine could not use. The em dash already reads as absent; the row
+   quiets with it rather than being coloured as a fault, because an unusable signal
+   is a fact about the filings, not a failure of the company. */
+.growthwork .gwrow.missing .k { color: var(--dim); font-weight: 400 }
+.growthwork .gwrow.missing .v b { color: var(--faint) }
+.growthwork .gwrow.missing .gwbar { display: none }
+
+/* ── what moved it afterwards ───────────────────────────────────────────────── */
+
+.growthwork .gwadjust { list-style: none; margin: 14px 0 0; padding: 0 }
+.growthwork .gwadjust li {
+  font-size: var(--t-small); line-height: 1.6; color: var(--dim);
+  max-width: 62ch; padding: 5px 0;
+}
+.growthwork .gwadjust .pts {
+  font-family: var(--m); font-weight: 600; color: var(--cream);
+  margin-right: 8px; white-space: nowrap;
+}
+
+/* A cap that bit refused a number the blend produced, which is a stronger statement
+   than a trim, so it sits on its own hairline. */
+.growthwork .gwcap {
+  margin: 14px 0 0; padding-top: 13px; border-top: 1px solid var(--hair);
+  font-size: var(--t-small); line-height: 1.6; color: var(--dim); max-width: 62ch;
+}
+
+/* The AI line is about who touched the number, not about the number, so it is the
+   quietest thing in the stage. */
+.growthwork .gwai {
+  margin: 12px 0 0;
+  font-size: var(--t-small); line-height: 1.6; color: var(--faint); max-width: 62ch;
+}
+
+/* Narrow: the value column stops being a column. Stacking the rate under the label
+   keeps the gloss from setting to four words a line. */
+@media (max-width: 640px) {
+  .growthwork .gwrow { flex-direction: column; gap: 10px }
+  .growthwork .gwrow .v {
+    width: 100%; flex-direction: row; align-items: baseline; gap: 12px;
+  }
+  .growthwork .gwbar { flex: 1 }
+}
