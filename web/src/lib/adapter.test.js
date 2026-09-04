@@ -267,6 +267,67 @@ describe('evidence', () => {
   })
 })
 
+/* ── the deep link into the filing ──────────────────────────────────────────── */
+
+/* Every reference in src/mocks/msft-live.json predates `filing_anchor`, which is
+   why the two "links to the readable 10-K" cases above still assert a bare
+   filing_url: an envelope without anchors must keep behaving exactly as it did.
+   These cases add the anchors and assert what changes — and, more importantly,
+   what refuses to. */
+describe('opening the filing at the figure, not at page one', () => {
+  const GROSS = 'us-gaap:GrossProfit'
+  const CAPEX = 'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment'
+  const base = envelope.latest_filing.filing_url
+
+  /** The envelope with `filing_anchor` written onto every reference carrying
+   *  `concept`, as the backend writes them once it has located the figure. */
+  const withAnchor = (concept, anchor, overrides = {}) => {
+    const clone = structuredClone(envelope)
+    const stamp = (ref) => {
+      if (ref?.xbrl_concept === concept) Object.assign(ref, { filing_anchor: anchor }, overrides)
+    }
+    for (const r of clone.analysis.deterministic_checklist.results) {
+      for (const ref of r.evidence_references ?? []) stamp(ref)
+    }
+    for (const t of clone.analysis.deterministic_baseline?.traces ?? []) {
+      for (const ref of t.evidence_references ?? []) stamp(ref)
+    }
+    return clone
+  }
+
+  const checkUrl = (view_) => view_.checks.find((c) => c.number === 1).evidence.url
+
+  it('points a check\u2019s link at the element its first figure is tagged with', () => {
+    expect(checkUrl(toView(withAnchor(GROSS, 'f-42')))).toBe(`${base}#f-42`)
+  })
+
+  it('points a valuation input\u2019s link at the same kind of element', () => {
+    const ev = toView(withAnchor(CAPEX, 'f-319')).the_math.evidence
+    expect(ev.starting_free_cash_flow.url).toBe(`${base}#f-319`)
+  })
+
+  it('keeps the anchor out of the raw XBRL link, which has no such element', () => {
+    const ev = toView(withAnchor(CAPEX, 'f-319')).the_math.evidence
+    expect(ev.starting_free_cash_flow.data_url).not.toContain('#')
+    expect(ev.starting_free_cash_flow.data_url).toContain('data.sec.gov')
+  })
+
+  it('ignores an anchor from a filing other than the one it links to', () => {
+    const view_ = toView(withAnchor(GROSS, 'f-42', { accession_number: '0001193125-25-000001' }))
+    expect(checkUrl(view_)).toBe(base)
+  })
+
+  it('drops an id that could not be a fragment rather than escaping it', () => {
+    for (const bad of ['1-leading-digit', 'has space', 'quote"break', '#f-42', '']) {
+      expect(checkUrl(toView(withAnchor(GROSS, bad)))).toBe(base)
+    }
+  })
+
+  it('leaves an envelope with no anchors exactly where it was', () => {
+    expect(checkUrl(toView(structuredClone(envelope)))).toBe(base)
+  })
+})
+
 /* ── evidence for the valuation inputs ──────────────────────────────────────── */
 
 describe('the math: evidence on the inputs', () => {

@@ -66,6 +66,10 @@ class EvidenceReference:
     transformation: str
     source_url: str
     retrieved_at: datetime
+    # The inline-XBRL element id this figure carries in the filing named above,
+    # so the reader's link lands on the number rather than on page one. None
+    # whenever we could not locate it beyond doubt -- see data/sec/fact_anchors.
+    filing_anchor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

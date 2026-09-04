@@ -21,7 +21,7 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: ANALYSIS_PIPELINE_VERSION
-        value: v1
+        value: v2
       - key: ANALYSIS_REFRESH_HOUR_UTC
         value: "23"
       - key: DATABASE_CONNECT_TIMEOUT_SECONDS

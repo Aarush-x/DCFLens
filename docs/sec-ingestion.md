@@ -129,7 +129,16 @@ Every reported normalized fact contains an immutable `EvidenceReference` with:
 - raw and normalized numeric values;
 - explicit transformation or calculation;
 - direct CIK-specific Company Facts URL;
-- timezone-aware retrieval timestamp.
+- timezone-aware retrieval timestamp;
+- `filing_anchor`, the inline-XBRL element id the figure carries in the latest annual filing, or `None`.
+
+## Filing anchors
+
+Company Facts gives a value; it does not give a place. `app/data/sec/fact_anchors.py` reads the latest annual filing's primary inline-XBRL document and, for each evidence reference drawn from that same accession, records the element id the figure is tagged with. The frontend appends it to the filing URL as a fragment, so a reader following a citation lands on the line in the cash-flow statement rather than on the cover page.
+
+An anchor is navigation and never a value. It is written only when concept, period, unit **and** magnitude all match a single tagged element, and only for facts rendered in the document body — facts inside `ix:header`/`ix:hidden` carry ids but have no layout, so a link to one would scroll nowhere. Magnitudes are compared unsigned, because a cash-flow statement prints capital expenditure as a negative and Company Facts stores it as a positive; that is the same line item either way, which is the whole of what an anchor claims.
+
+The pass is best-effort by construction. It runs outside the block that maps SEC failures onto errors, reuses the document the NVIDIA cash fallback already fetched when there is one, and returns the result untouched on any failure: a filing we cannot read costs the reader a precise link and costs the valuation nothing.
 
 Every `NormalizedFact` also carries a `quality` of `reported` for a directly selected SEC fact or `calculated` for a derived one. Calculated facts retain every input evidence reference. Each reference records the derived formula plus its own source transformation, allowing a free-cash-flow, debt, or cash claim to resolve to every contributing SEC fact.
 

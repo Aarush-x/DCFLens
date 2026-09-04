@@ -223,6 +223,39 @@ const CONCEPT_LABELS = {
 /** The reported figure behind a reference. */
 const refValue = (ref) => num(ref?.normalized_value) ?? num(ref?.raw_value)
 
+/* Ids we will paste into a URL fragment, mirrored from the backend's own rule
+   (apps/api/app/data/sec/fact_anchors.py). Nothing malformed reaches this far, and
+   an anchor we cannot vouch for is dropped rather than escaped — the link then
+   opens the filing at page one, which is where it used to open anyway. */
+const ANCHOR = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/
+
+/**
+ * The readable filing on sec.gov, opened at the figure rather than at page one.
+ *
+ * Inline XBRL gives every tagged number an element id and SEC serves the document
+ * as text/html, so `…/aapl-20250927.htm#f-307` scrolls the reader straight to the
+ * line the drawer is quoting. The backend attaches that id as
+ * `evidence_reference.filing_anchor`, and only for figures it located in THIS
+ * filing — hence the accession check: an id from an older 10-K would point at
+ * nothing here, or at a different number that happens to share it.
+ *
+ * A reference without an anchor is the ordinary case, not a failure. Most of the
+ * envelope's references come from earlier years, and the link degrades to exactly
+ * what it was before: the filing, undeep-linked.
+ */
+function filingUrl(refs, filing) {
+  const base = str(filing?.filing_url)
+  if (!base || base.includes('#')) return base
+  const accession = str(filing?.accession_number)
+  const hit = arr(refs).find(
+    (r) =>
+      ANCHOR.test(String(r?.filing_anchor ?? '')) &&
+      accession != null &&
+      str(r?.accession_number) === accession,
+  )
+  return hit ? `${base}#${hit.filing_anchor}` : base
+}
+
 /** One `values_used` row. Shared by the checklist evidence and the valuation-input
  *  evidence below, so both render identically in the drawer. */
 function toValueUsed(ref) {
@@ -251,6 +284,9 @@ function toValueUsed(ref) {
  * objects share two source_urls, and the one they carry is the raw XBRL companyfacts
  * JSON (data.sec.gov/api/xbrl/companyfacts/CIK…json). Sending a beginner there is
  * worse than sending them nowhere. source_url is kept as `data_url`, secondary.
+ * `filingUrl` then aims that link at the figure itself where the backend located
+ * one, so "Read the filing on SEC.gov" opens the cash-flow statement and not the
+ * cover page.
  *
  * Returns null when there is nothing to show — the contract says evidence is
  * nullable everywhere and a null renders as no trigger at all.
@@ -282,7 +318,7 @@ function toEvidence(result, filing) {
     calculation,
     // The envelope has no filing section pointer. Contract allows null.
     section: null,
-    url: str(filing?.filing_url),
+    url: filingUrl(refs, filing),
     // Every reference in this envelope is an XBRL concept. `text` is reserved for
     // claims parsed out of filing prose, which only the AI path produces.
     provenance: refs.length ? 'xbrl' : 'text',
@@ -398,7 +434,7 @@ function evidenceFromRefs(refs, filing, calculation) {
     values_used: refs.map(toValueUsed),
     calculation,
     section: null,
-    url: str(filing?.filing_url),
+    url: filingUrl(refs, filing),
     provenance: 'xbrl',
     data_url: str(head?.source_url),
     metrics: [],

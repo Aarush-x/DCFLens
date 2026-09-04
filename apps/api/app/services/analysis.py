@@ -22,9 +22,11 @@ from app.ai.service import prepare_deterministic_analysis, run_qualitative_analy
 from app.checklist.models import ChecklistInput, QualitativeChecklistFacts, FilingEvidenceReference
 from app.data.sec.narrative import NarrativeContext, TopicCoverage, TOPICS, extract_narrative
 from app.core.settings import Settings
+from app.data.sec.fact_anchors import annotate_filing_anchors
 from app.data.sec.filing_cash import needs_filing_cash, supplement_filing_cash
 from app.data.sec import (
     CompanySubmissionProfile,
+    FilingDocument,
     NormalizationResult,
     SecClient,
     SecClientConfig,
@@ -428,6 +430,31 @@ class AnalysisService:
                 for topic in TOPICS
             ), warnings=("Annual-report text could not be reviewed; structured financial analysis remains available.",))
 
+    def _locate_facts_in_filing(
+        self,
+        normalized: NormalizationResult,
+        filing: FilingDocument | None,
+    ) -> NormalizationResult:
+        """Attach the filing anchors that make an evidence link land on the figure.
+
+        Deliberately best-effort, and outside the block that maps SEC failures onto
+        errors: these ids are a courtesy to the reader, never an input to a number,
+        so a filing we cannot fetch or parse costs the reader a precise link and
+        costs the valuation nothing. ``filing`` is passed in when the cash fallback
+        has already fetched it, so no company is downloaded twice.
+        """
+        try:
+            if filing is None:
+                fetch = getattr(self._sec, "get_latest_10k_for_cik", None)
+                if fetch is None:
+                    return normalized
+                filing = fetch(normalized.cik)
+            return annotate_filing_anchors(normalized, filing)
+        except Exception as exc:
+            # No response bodies or filing text in logs.
+            logger.info("filing_anchors_unavailable", extra={"error_type": type(exc).__name__})
+            return normalized
+
     def _load_company(self, ticker: str, *, force: bool = False) -> CompanyData:
         if not force:
             cached = self._normalized_cache.get(ticker)
@@ -438,10 +465,13 @@ class AnalysisService:
             document = self._sec.get_company_facts(resolution.cik)
             profile = self._sec.get_submission_profile(resolution.cik)
             normalized = normalize_company_facts(document)
-            if needs_filing_cash(normalized):
-                normalized = supplement_filing_cash(
-                    normalized, self._sec.get_latest_10k_for_cik(resolution.cik),
-                )
+            filing = (
+                self._sec.get_latest_10k_for_cik(resolution.cik)
+                if needs_filing_cash(normalized)
+                else None
+            )
+            if filing is not None:
+                normalized = supplement_filing_cash(normalized, filing)
         except SecRequestError as exc:
             if exc.status_code == 429:
                 raise ProviderRateLimitError("SEC EDGAR rate limit reached") from exc
@@ -458,6 +488,7 @@ class AnalysisService:
             raise MissingSecDataError(
                 "SEC EDGAR returned incomplete or unsupported company data"
             ) from exc
+        normalized = self._locate_facts_in_filing(normalized, filing)
         result = CompanyData(
             resolution=resolution,
             profile=profile,
