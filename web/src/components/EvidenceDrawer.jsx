@@ -38,6 +38,35 @@ import './EvidenceDrawer.css'
  * source (form, period, filed date, the figures, the links) stays.
  */
 
+/**
+ * The href for "Read the filing on SEC.gov".
+ *
+ * Two mechanisms, and they stack. `evidence.url` already ends in the inline-XBRL
+ * element id, which scrolls the filing to the figure. A scroll-to-text-fragment
+ * appended after it (`#f-307:~:text=111%2C482`) makes the browser paint its own
+ * temporary highlight on the number too — the reader sees WHICH number we mean,
+ * and the mark clears on their next click. We do not style it and cannot: the
+ * page is sec.gov's.
+ *
+ * Guarded on `document.fragmentDirective` because the two mechanisms do NOT
+ * degrade into one another. A browser that has not implemented fragment
+ * directives reads the whole of `f-307:~:text=…` as one element id, finds no such
+ * element, and scrolls nowhere — losing the anchor we already had. So the
+ * directive is only ever added where it is understood.
+ *
+ * The backend supplies `highlight` only where it has established that the browser
+ * will land on OUR figure and not an earlier printing of the same number (see
+ * app/data/sec/fact_anchors.py). Where it has not, this returns the plain anchor,
+ * which is exactly the link that shipped before the highlight existed.
+ */
+export function filingHref(evidence, doc = typeof document === 'undefined' ? null : document) {
+  const url = evidence?.url
+  if (!url) return null
+  const text = evidence?.highlight
+  if (!text || !doc || !('fragmentDirective' in doc)) return url
+  return `${url}:~:text=${encodeURIComponent(text)}`
+}
+
 /* ── formatting ─────────────────────────────────────────────────────────────── */
 
 const MONTHS = [
@@ -346,7 +375,7 @@ export default function EvidenceDrawer({ evidence, claim = null, open, onClose }
             feed is offered second, for anyone who actually wants it. */}
         <footer className="evlinks">
           {evidence.url ? (
-            <a href={evidence.url} target="_blank" rel="noreferrer">
+            <a href={filingHref(evidence)} target="_blank" rel="noreferrer">
               Read the filing on SEC.gov &#8599;
             </a>
           ) : (

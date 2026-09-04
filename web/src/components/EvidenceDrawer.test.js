@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filedOn, evidenceValue, transformationGloss } from './EvidenceDrawer.jsx'
+import { filedOn, evidenceValue, filingHref, transformationGloss } from './EvidenceDrawer.jsx'
 import { EMPTY } from '../lib/format.js'
 
 /* Only the two pure functions. The drawer's rendering is checked by eye against
@@ -85,5 +85,46 @@ describe('transformationGloss', () => {
     expect(transformationGloss('')).toBe(null)
     expect(transformationGloss(null)).toBe(null)
     expect(transformationGloss(undefined)).toBe(null)
+  })
+})
+
+
+/* ── filingHref ─────────────────────────────────────────────────────────────── */
+
+/* The one piece of logic between "the backend located the figure" and "the reader
+   lands on it highlighted". The `doc` argument is the seam: these run in node,
+   where there is no document at all, which is also the shape of a browser that
+   has not implemented fragment directives. */
+describe('filingHref', () => {
+  const SUPPORTS = { fragmentDirective: {} }
+  const evidence = {
+    url: 'https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm#f-307',
+    highlight: '111,482',
+  }
+
+  it('appends a text fragment where the browser understands one', () => {
+    expect(filingHref(evidence, SUPPORTS)).toBe(`${evidence.url}:~:text=111%2C482`)
+  })
+
+  it('encodes the comma, which would otherwise end the match', () => {
+    // "111,482" unescaped would read as the range "111" to "482".
+    expect(filingHref(evidence, SUPPORTS)).toContain('%2C')
+    expect(filingHref(evidence, SUPPORTS)).not.toMatch(/text=[^&]*,/)
+  })
+
+  it('leaves the anchor alone where fragment directives are not supported', () => {
+    // Not a fallback the browser performs: an unsupported directive is read as
+    // part of the element id and scrolls nowhere, so we must not send one.
+    expect(filingHref(evidence, {})).toBe(evidence.url)
+    expect(filingHref(evidence, null)).toBe(evidence.url)
+  })
+
+  it('is the plain anchor when the backend located no safe figure', () => {
+    expect(filingHref({ url: evidence.url, highlight: null }, SUPPORTS)).toBe(evidence.url)
+  })
+
+  it('is null when there is no filing link at all', () => {
+    expect(filingHref({ url: null, highlight: '111,482' }, SUPPORTS)).toBeNull()
+    expect(filingHref(null, SUPPORTS)).toBeNull()
   })
 })

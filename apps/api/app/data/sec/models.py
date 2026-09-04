@@ -70,6 +70,10 @@ class EvidenceReference:
     # so the reader's link lands on the number rather than on page one. None
     # whenever we could not locate it beyond doubt -- see data/sec/fact_anchors.
     filing_anchor: str | None = None
+    # How that figure is printed in the filing ("111,482"), when the string is
+    # unique in the document. The frontend turns it into a text fragment so the
+    # browser paints its own temporary highlight; None means print no directive.
+    filing_highlight: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

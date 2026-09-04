@@ -130,13 +130,22 @@ Every reported normalized fact contains an immutable `EvidenceReference` with:
 - explicit transformation or calculation;
 - direct CIK-specific Company Facts URL;
 - timezone-aware retrieval timestamp;
-- `filing_anchor`, the inline-XBRL element id the figure carries in the latest annual filing, or `None`.
+- `filing_anchor`, the inline-XBRL element id the figure carries in the latest annual filing, or `None`;
+- `filing_highlight`, the figure as that filing prints it (`111,482`), or `None`.
 
 ## Filing anchors
 
 Company Facts gives a value; it does not give a place. `app/data/sec/fact_anchors.py` reads the latest annual filing's primary inline-XBRL document and, for each evidence reference drawn from that same accession, records the element id the figure is tagged with. The frontend appends it to the filing URL as a fragment, so a reader following a citation lands on the line in the cash-flow statement rather than on the cover page.
 
 An anchor is navigation and never a value. It is written only when concept, period, unit **and** magnitude all match a single tagged element, and only for facts rendered in the document body — facts inside `ix:header`/`ix:hidden` carry ids but have no layout, so a link to one would scroll nowhere. Magnitudes are compared unsigned, because a cash-flow statement prints capital expenditure as a negative and Company Facts stores it as a positive; that is the same line item either way, which is the whole of what an anchor claims.
+
+### Highlighting the figure
+
+`filing_highlight` carries the printed form of the figure so the frontend can append a scroll-to-text-fragment and let the browser paint its own temporary mark on the number. A browser resolves a text fragment to the **first** match in document order, and a directive that matches nothing is not merely ignored — the browser discards the element id along with it and scrolls nowhere. So the highlight is offered only where it is provably safe: the parser records each figure's position as the text streams, and keeps the highlight only when the first printed occurrence of that string in the document body is this fact's own. A figure the MD&A printed earlier gets no highlight and keeps its anchor.
+
+Counting is done on the body text as a reader sees it. Block-level elements insert a boundary, because a browser will not match across one and neither may we: without that, adjacent table cells concatenate into `activities111,482` and the figure reads as the tail of a word. Text inside `ix:header` and inside `style`/`script`/`title` is excluded, and the haystack is bounded at 4M characters — past the bound nothing is offered, since a partial count could call a repeated figure unique.
+
+Measured against eight live filings, 35–86% of anchored figures qualify (AAPL 86%, JNJ 81%, AMZN 85%, WMT 35%). Forty randomly sampled directives were confirmed in a browser to land on their own figure.
 
 The pass is best-effort by construction. It runs outside the block that maps SEC failures onto errors, reuses the document the NVIDIA cash fallback already fetched when there is one, and returns the result untouched on any failure: a filing we cannot read costs the reader a precise link and costs the valuation nothing.
 

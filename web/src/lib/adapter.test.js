@@ -326,6 +326,34 @@ describe('opening the filing at the figure, not at page one', () => {
   it('leaves an envelope with no anchors exactly where it was', () => {
     expect(checkUrl(toView(structuredClone(envelope)))).toBe(base)
   })
+
+  /* The highlight rides on the anchor and is kept apart from the URL, because it
+     goes in a different part of the fragment and only where the browser reads it
+     — see filingHref in EvidenceDrawer.jsx. */
+  it('carries the printed figure alongside the anchor that earned it', () => {
+    const view_ = toView(withAnchor(GROSS, 'f-42', { filing_highlight: '225,465' }))
+    const ev = view_.checks.find((c) => c.number === 1).evidence
+    expect(ev.url).toBe(`${base}#f-42`)
+    expect(ev.highlight).toBe('225,465')
+  })
+
+  it('never carries a highlight without the anchor it belongs to', () => {
+    const view_ = toView(withAnchor(GROSS, 'not a valid id', { filing_highlight: '225,465' }))
+    const ev = view_.checks.find((c) => c.number === 1).evidence
+    expect(ev.url).toBe(base)
+    expect(ev.highlight).toBeNull()
+  })
+
+  it('takes both halves from one reference, so they cannot disagree', () => {
+    const clone = structuredClone(envelope)
+    const refs = clone.analysis.deterministic_checklist.results.find((r) => r.checklist_number === 1)
+      .evidence_references
+    Object.assign(refs[0], { filing_anchor: 'f-42', filing_highlight: '225,465' })
+    Object.assign(refs[1], { filing_anchor: 'f-99', filing_highlight: '281,724' })
+    const ev = toView(clone).checks.find((c) => c.number === 1).evidence
+    expect(ev.url).toBe(`${base}#f-42`)
+    expect(ev.highlight).toBe('225,465')
+  })
 })
 
 /* ── evidence for the valuation inputs ──────────────────────────────────────── */

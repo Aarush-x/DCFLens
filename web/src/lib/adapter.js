@@ -239,13 +239,19 @@ const ANCHOR = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/
  * filing — hence the accession check: an id from an older 10-K would point at
  * nothing here, or at a different number that happens to share it.
  *
+ * `highlight` is the same figure as the filing prints it ("111,482"), carried
+ * separately because it goes in a different part of the URL and only where the
+ * browser supports it — see `filingHref` in EvidenceDrawer.jsx. It comes from the
+ * SAME reference as the anchor, never a second one, so the two can never disagree
+ * about which figure they mean.
+ *
  * A reference without an anchor is the ordinary case, not a failure. Most of the
  * envelope's references come from earlier years, and the link degrades to exactly
  * what it was before: the filing, undeep-linked.
  */
-function filingUrl(refs, filing) {
+function filingLink(refs, filing) {
   const base = str(filing?.filing_url)
-  if (!base || base.includes('#')) return base
+  if (!base || base.includes('#')) return { url: base, highlight: null }
   const accession = str(filing?.accession_number)
   const hit = arr(refs).find(
     (r) =>
@@ -253,7 +259,8 @@ function filingUrl(refs, filing) {
       accession != null &&
       str(r?.accession_number) === accession,
   )
-  return hit ? `${base}#${hit.filing_anchor}` : base
+  if (!hit) return { url: base, highlight: null }
+  return { url: `${base}#${hit.filing_anchor}`, highlight: str(hit.filing_highlight) }
 }
 
 /** One `values_used` row. Shared by the checklist evidence and the valuation-input
@@ -298,6 +305,7 @@ function toEvidence(result, filing) {
 
   const head = refs[0] ?? null
   const values_used = refs.map(toValueUsed)
+  const link = filingLink(refs, filing)
 
   /* The first calculation string that was written for a reader rather than for a
      log. `metrics_used[].calculation` is usually the readable one ("gross profit /
@@ -318,7 +326,8 @@ function toEvidence(result, filing) {
     calculation,
     // The envelope has no filing section pointer. Contract allows null.
     section: null,
-    url: filingUrl(refs, filing),
+    url: link.url,
+    highlight: link.highlight,
     // Every reference in this envelope is an XBRL concept. `text` is reserved for
     // claims parsed out of filing prose, which only the AI path produces.
     provenance: refs.length ? 'xbrl' : 'text',
@@ -427,6 +436,7 @@ function solePair(refs, minuend, subtrahend, target, absolute = false) {
 function evidenceFromRefs(refs, filing, calculation) {
   if (!refs?.length) return null
   const head = refs[0]
+  const link = filingLink(refs, filing)
   return {
     filing_type: str(head?.filing_form) ?? str(filing?.filing_form),
     fiscal_period: fiscalPeriod(filing, head),
@@ -434,7 +444,8 @@ function evidenceFromRefs(refs, filing, calculation) {
     values_used: refs.map(toValueUsed),
     calculation,
     section: null,
-    url: filingUrl(refs, filing),
+    url: link.url,
+    highlight: link.highlight,
     provenance: 'xbrl',
     data_url: str(head?.source_url),
     metrics: [],

@@ -13,6 +13,14 @@ tagged element in the filing we already name, so a wrong anchor cannot be built
 out of a near miss; anything unmatched simply gets no anchor and the link keeps
 opening the filing exactly as it does today.
 
+Each fact also gets ``filing_highlight`` where we can earn it: the text the figure
+is printed as, which the frontend turns into a scroll-to-text-fragment so the
+browser paints its own temporary highlight on the number. That directive is only
+emitted when the printed string occurs EXACTLY ONCE in the document body, because
+a text fragment that fails to match is not merely ignored -- the browser then
+discards the element id too and scrolls nowhere. Uniqueness is what makes the
+highlight a strict improvement on the plain anchor rather than a gamble against it.
+
 Parsing is streaming (``HTMLParser``, as in ``narrative``) rather than a DOM: the
 primary document is bounded at 20MB and building a tree for one would cost more
 memory than the service has to spare. Element names are matched on their local
@@ -41,6 +49,22 @@ MAX_FACTS = 200_000
 ANCHOR_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
 NUMBER_PATTERN = re.compile(r"^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+MAX_TEXT_CHARS = 4_000_000
+# Printed figures, bounded the way a browser bounds a text fragment: a match may
+# not begin or end in the middle of a word or a number, so "12,715" inside
+# "112,715" is not an occurrence of it.
+PRINTED_NUMBER = re.compile(r"(?<![\w,.])\d[\d,]*(?:\.\d+)?(?![\w,.])")
+# Text we count but a reader never sees.
+INVISIBLE = frozenset({"style", "script", "title"})
+# Elements that render as their own box. A browser's text fragment will not match
+# across one, and neither will our count: without this, adjacent table cells
+# concatenate into "activities111,482" and the figure looks like part of a word.
+BLOCKS = frozenset({
+    "address", "article", "blockquote", "br", "caption", "dd", "div", "dl", "dt",
+    "figure", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li",
+    "ol", "p", "pre", "section", "table", "tbody", "td", "tfoot", "th", "thead",
+    "tr", "ul",
+})
 # Company Facts spells units this way; inline XBRL spells them as measures. Both
 # halves of the pair have to agree before a fact is considered the same fact.
 MEASURES = {"usd": "USD", "shares": "shares", "pure": "pure"}
@@ -62,6 +86,9 @@ class FilingFact:
     unit: str
     value: float
     anchor: str
+    #: How the figure is printed in the filing ("111,482"), or None when that
+    #: string is not unique in the document and so cannot be safely highlighted.
+    highlight: str | None = None
 
     @property
     def key(self) -> tuple[str, str, str, str]:
@@ -84,6 +111,14 @@ class _FactScanner(HTMLParser):
         self._units: dict[str, str] = {}
         self.facts: list[FilingFact] = []
         self.truncated = False
+        # The body text as a reader sees it, which is the haystack a browser's
+        # text fragment searches. Bounded like narrative's: past the bound we
+        # stop counting and no figure is offered for highlighting, because a
+        # partial count could call a repeated number unique.
+        self._visible: list[str] = []
+        self._visible_size = 0
+        self._offsets: list[int] = []
+        self._skip_depth = 0
 
         self._context: dict[str, object] | None = None
         self._unit: dict[str, object] | None = None
@@ -100,6 +135,10 @@ class _FactScanner(HTMLParser):
     def handle_starttag(self, tag, attrs):
         name = _local(tag)
         attributes = {key: (value or "") for key, value in attrs}
+        self._break(name)
+        if name in INVISIBLE:
+            self._skip_depth += 1
+            return
         if name in {"header", "hidden"}:
             self._header_depth += 1
             return
@@ -155,6 +194,10 @@ class _FactScanner(HTMLParser):
 
     def handle_endtag(self, tag):
         name = _local(tag)
+        self._break(name)
+        if name in INVISIBLE:
+            self._skip_depth = max(0, self._skip_depth - 1)
+            return
         if name in {"header", "hidden"}:
             self._header_depth = max(0, self._header_depth - 1)
             return
@@ -173,6 +216,54 @@ class _FactScanner(HTMLParser):
     def handle_data(self, data):
         if self._sink is not None:
             self._sink.append(data)
+        # A fact's own digits are part of what the reader sees, so this runs
+        # alongside the sink rather than instead of it.
+        if not self._header_depth and not self._skip_depth and not self.truncated:
+            # Normalised as it arrives, so a chunk's length never changes after
+            # the fact and the offsets recorded below stay exact.
+            chunk = re.sub(r"\s+", " ", data)
+            if self._visible_size + len(chunk) > MAX_TEXT_CHARS:
+                self.truncated = True
+                return
+            self._visible.append(chunk)
+            self._visible_size += len(chunk)
+
+    def _break(self, name: str) -> None:
+        """Record a box boundary, so two cells never read as one word."""
+        if name in BLOCKS and not self._header_depth and not self._skip_depth:
+            self._visible.append(" ")
+            self._visible_size += 1
+
+    def resolved_facts(self) -> list[FilingFact]:
+        """The facts, keeping a highlight only where the browser will land on it.
+
+        A text fragment resolves to the FIRST match in document order, so a figure
+        is safe to highlight exactly when the first printed occurrence of that
+        string is this fact's own. That is a weaker and more useful test than
+        global uniqueness: a number repeated later in the notes still highlights,
+        and one the MD&A printed first correctly does not.
+
+        Offsets are recorded as the text streams and resolved in one pass here. A
+        filing carries hundreds of facts and megabytes of text; searching per fact
+        would be quadratic in both.
+        """
+        if self.truncated:
+            return [replace(fact, highlight=None) for fact in self.facts]
+        text = "".join(self._visible)
+        first: dict[str, int] = {}
+        for match in PRINTED_NUMBER.finditer(text):
+            first.setdefault(match.group(), match.start())
+        resolved = []
+        for fact, end in zip(self.facts, self._offsets):
+            printed = fact.highlight or ""
+            # The fact's own text ends at `end`; look back just far enough to
+            # find it, allowing for whitespace the printed form has stripped.
+            window = max(0, end - len(printed) - 8)
+            start = text.rfind(printed, window, end) if printed else -1
+            if start < 0 or first.get(printed) != start:
+                fact = replace(fact, highlight=None)
+            resolved.append(fact)
+        return resolved
 
     # -- assembly -----------------------------------------------------------
 
@@ -254,14 +345,16 @@ class _FactScanner(HTMLParser):
             or ":" not in str(fact["name"])
         ):
             return
-        value = _decode(
-            "".join(fact["text"]).strip(), str(fact["scale"]), str(fact["sign"])
-        )
+        printed = "".join(fact["text"]).strip()
+        value = _decode(printed, str(fact["scale"]), str(fact["sign"]))
         if value is None:
             return
         self.facts.append(
-            FilingFact(str(fact["name"]), period[0], period[1], unit, value, anchor)
+            FilingFact(
+                str(fact["name"]), period[0], period[1], unit, value, anchor, printed
+            )
         )
+        self._offsets.append(self._visible_size)
 
 
 def _decode(text: str, scale: str, sign: str) -> float | None:
@@ -295,7 +388,7 @@ def filing_fact_index(
     scanner.feed(document.content)
     scanner.close()
     index: dict[tuple[str, str, str, str], list[FilingFact]] = {}
-    for fact in scanner.facts:
+    for fact in scanner.resolved_facts():
         index.setdefault(fact.key, []).append(fact)
     return index
 
@@ -321,7 +414,11 @@ def _anchored(
         if math.isclose(
             abs(candidate.value), abs(reference.raw_value), rel_tol=1e-6, abs_tol=0.5
         ):
-            return replace(reference, filing_anchor=candidate.anchor)
+            return replace(
+                reference,
+                filing_anchor=candidate.anchor,
+                filing_highlight=candidate.highlight,
+            )
     return reference
 
 
